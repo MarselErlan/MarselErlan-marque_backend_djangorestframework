@@ -1,0 +1,16 @@
+# ==============================================
+# ADD THESE TO YOUR .env FILE
+# ==============================================
+
+# Pinecone Configuration (Vector Database)
+PINECONE_API_KEY=pcsk_3Sxd5N_KpGG7jGYGYqbb1Sobrt2HGi9gAj91Q5ay9bpUT3W7KSfCignYgmskq7ESLU6rX
+PINECONE_HOST=https://marque-93wonvo.svc.aped-4627-b74a.pinecone.io
+
+# ==============================================
+# SETUP STEPS:
+# ==============================================
+# 1. Copy the above lines to your .env file
+# 2. Run: pip install -r requirements.txt
+# 3. Run: python manage.py sync_products_to_pinecone
+# 4. Done! AI now uses semantic search 🎉
+

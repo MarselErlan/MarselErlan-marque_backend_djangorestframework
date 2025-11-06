@@ -1,0 +1,18 @@
+Django==5.2.8
+djangorestframework==3.16.1
+python-dotenv==1.2.1
+psycopg2-binary==2.9.11
+django-cors-headers==4.6.0
+
+# AI Recommendations
+langgraph==0.2.52
+langchain==0.3.11
+langchain-openai==0.2.10
+langchain-core==0.3.21
+langchain-community==0.3.10
+pydantic==2.10.3
+
+# Vector Database & Embeddings
+pinecone-client==6.0.0
+sentence-transformers==5.1.2
+
