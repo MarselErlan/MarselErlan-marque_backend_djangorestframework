@@ -210,6 +210,12 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only in development
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'https://marque.website',
+    'https://marquebwithd-production.up.railway.app',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://marque.website',
+    'https://marquebwithd-production.up.railway.app',
 ]
 
 # Media files
