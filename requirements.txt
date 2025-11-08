@@ -3,6 +3,7 @@ djangorestframework==3.16.1
 python-dotenv==1.2.1
 psycopg2-binary==2.9.11
 django-cors-headers==4.6.0
+django-jazzmin==3.0.1
 
 # AI Recommendations
 langgraph==0.2.52
