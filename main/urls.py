@@ -19,5 +19,8 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # API v1 endpoints
+    path('api/v1/', include('users.urls')),  # Authentication & Profile
     path('api/ai/', include('ai_assistant.urls')),  # AI-powered recommendations
 ]

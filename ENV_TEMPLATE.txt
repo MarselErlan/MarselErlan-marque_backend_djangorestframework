@@ -1,0 +1,48 @@
+# ============================================
+# Environment Variables Template
+# ============================================
+# Copy these to your .env file and fill in your values
+
+# ============================================
+# DATABASE CONFIGURATION
+# ============================================
+DB_ENGINE=django.db.backends.postgresql
+DB_NAME=railway
+DB_USER=postgres
+DB_PASSWORD=password
+DB_HOST=host
+DB_PORT=13569
+
+# ============================================
+# DJANGO CONFIGURATION
+# ============================================
+SECRET_KEY=your_secret_key_here
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# ============================================
+# AI CONFIGURATION (Optional - for recommendations)
+# ============================================
+OPENAI_API_KEY=sk-your-openai-key-here
+
+# ============================================
+# PINECONE CONFIGURATION (Optional - for semantic search)
+# ============================================  
+PINECONE_API_KEY=key
+PINECONE_HOST=host
+
+# ============================================
+# TWILIO SMS CONFIGURATION (For Authentication)
+# ============================================
+TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
+TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
+TWILIO_VERIFY_SERVICE_SID=your_twilio_verify_service_sid_here
+
+# ============================================
+# INSTRUCTIONS:
+# ============================================
+# 1. Create a .env file in the project root
+# 2. Copy these variables to .env
+# 3. Replace 'your_xxx_here' with your actual credentials
+# 4. Never commit .env to version control!
+

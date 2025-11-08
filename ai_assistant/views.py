@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from products.models import Product
-from .graph import recommendation_graph
+from .graph import get_recommendation_graph
 import logging
 
 logger = logging.getLogger(__name__)
@@ -94,8 +94,8 @@ class AIRecommendationView(APIView):
             
             logger.info(f"AI Recommendation request: {query}, market={user_market}, gender={user_gender}")
             
-            # Run LangGraph workflow
-            result = recommendation_graph.invoke(initial_state)
+            # Run LangGraph workflow (lazy-loaded)
+            result = get_recommendation_graph().invoke(initial_state)
             
             # Get recommended products from database
             recommended_ids = result["selected_products"]

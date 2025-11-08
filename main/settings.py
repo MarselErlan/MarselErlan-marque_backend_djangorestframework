@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -30,6 +31,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-(82y&^x4+qs8t2!kexoiqv4^lz
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
+TESTING = 'test' in sys.argv
+
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
 
@@ -46,6 +49,7 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework',
+    'rest_framework.authtoken',  # Token-based authentication
     'corsheaders',
     
     # Local apps
@@ -91,16 +95,31 @@ WSGI_APPLICATION = 'main.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'railway'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+# Use SQLite for tests (faster, no network required)
+if (
+    'pytest' in sys.argv[0]
+    or 'pytest' in sys.argv
+    or 'test' in sys.argv
+    or os.getenv('PYTEST_CURRENT_TEST')
+):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',  # In-memory database for tests
+        }
     }
-}
+else:
+    # PostgreSQL for development/production
+    DATABASES = {
+        'default': {
+            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+            'NAME': os.getenv('DB_NAME', 'railway'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
+    }
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'

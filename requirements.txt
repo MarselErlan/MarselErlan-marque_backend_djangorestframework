@@ -17,3 +17,10 @@ pydantic==2.10.3
 pinecone-client==6.0.0
 sentence-transformers==5.1.2
 
+# SMS Verification
+twilio==8.10.0
+
+# Testing
+pytest==8.3.3
+pytest-django==4.8.0
+

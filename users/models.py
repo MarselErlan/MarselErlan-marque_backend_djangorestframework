@@ -81,7 +81,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.phone} - {self.full_name or 'No Name'}"
+        return self.phone
     
     @property
     def name(self):
@@ -91,10 +91,45 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def formatted_phone(self):
         """Return formatted phone number"""
+        return self.get_formatted_phone()
+    
+    def get_formatted_phone(self):
+        """Return formatted phone number (method version for serializer)"""
         # Simple formatting for Kyrgyz numbers
         if self.phone.startswith('+996') and len(self.phone) == 13:
             return f"+996 {self.phone[4:7]} {self.phone[7:9]} {self.phone[9:11]} {self.phone[11:13]}"
+        # US phone formatting
+        elif self.phone.startswith('+1') and len(self.phone) == 12:
+            return f"+1 ({self.phone[2:5]}) {self.phone[5:8]}-{self.phone[8:12]}"
         return self.phone
+    
+    def get_full_name(self):
+        """Get full name (method version for views)"""
+        return self.full_name or ''
+    
+    def get_country(self):
+        """Get country based on market"""
+        if self.market == 'KG':
+            return 'Kyrgyzstan'
+        elif self.market == 'US':
+            return 'United States'
+        return self.country
+    
+    def get_currency(self):
+        """Get currency symbol based on market"""
+        if self.market == 'KG':
+            return 'сом'
+        elif self.market == 'US':
+            return '$'
+        return 'сом'
+    
+    def get_currency_code(self):
+        """Get currency code based on market"""
+        if self.market == 'KG':
+            return 'KGS'
+        elif self.market == 'US':
+            return 'USD'
+        return 'KGS'
 
 
 class VerificationCode(models.Model):
@@ -172,7 +207,7 @@ class Address(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.user.phone} - {self.title} ({self.market})"
+        return f"{self.title} - {self.full_address}"
     
     def save(self, *args, **kwargs):
         # Auto-populate market and country from user on creation
@@ -207,7 +242,7 @@ class PaymentMethod(models.Model):
         ('mastercard', 'Mastercard'),
         ('mir', 'MIR'),  # Only available in KG market
         ('amex', 'American Express'),  # More common in US
-        ('other', 'Other'),
+        ('other', 'Unknown'),
     ]
     
     MARKET_CHOICES = [
@@ -239,10 +274,29 @@ class PaymentMethod(models.Model):
     def __str__(self):
         return f"{self.user.phone} - {self.card_type} {self.card_number_masked} ({self.market})"
     
+    def get_card_type(self):
+        """Get human-readable card type"""
+        card_types = dict(self.CARD_TYPE_CHOICES)
+        return card_types.get(self.card_type, 'Unknown')
+    
     def save(self, *args, **kwargs):
         # Auto-populate market from user on creation
         if not self.pk and self.user:
             self.market = self.user.market
+        
+        # Auto-detect card type from card number
+        if self.card_number_masked:
+            first_digit = self.card_number_masked[0] if self.card_number_masked else None
+            if first_digit == '4':
+                self.card_type = 'visa'
+            elif first_digit == '5':
+                self.card_type = 'mastercard'
+            elif first_digit == '3':
+                self.card_type = 'amex'
+            elif first_digit == '2':
+                self.card_type = 'mir'
+            elif first_digit == '*' or not first_digit.isdigit():
+                self.card_type = 'other'  # Masked or unknown
         
         # If this payment method is set as default, unset other defaults for same market
         if self.is_default:

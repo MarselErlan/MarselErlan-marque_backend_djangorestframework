@@ -74,6 +74,13 @@ def create_recommendation_graph():
     return workflow.compile()
 
 
-# Global compiled graph
-recommendation_graph = create_recommendation_graph()
+# Lazy-loaded graph to avoid import-time crashes
+_recommendation_graph = None
+
+def get_recommendation_graph():
+    """Lazy-load the recommendation graph"""
+    global _recommendation_graph
+    if _recommendation_graph is None:
+        _recommendation_graph = create_recommendation_graph()
+    return _recommendation_graph
 
