@@ -33,7 +33,24 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 TESTING = 'test' in sys.argv
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
+raw_allowed_hosts = os.getenv('ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = [host.strip() for host in raw_allowed_hosts.split(',') if host.strip()]
+
+# Ensure essential defaults are present (localhost + production Railway domain)
+DEFAULT_ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'marquebwithd-production.up.railway.app',
+]
+for host in DEFAULT_ALLOWED_HOSTS:
+    if host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
+
+# Railway automatically injects the public domain; add it dynamically if present.
+for env_var in ('RAILWAY_PUBLIC_DOMAIN', 'RAILWAY_DOMAIN'):
+    railway_domain = os.getenv(env_var)
+    if railway_domain and railway_domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(railway_domain)
 
 
 # Application definition
