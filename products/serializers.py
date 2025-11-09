@@ -76,6 +76,13 @@ class CategoryDetailSerializer(CategoryListSerializer):
     pass
 
 
+class ImageUploadSerializer(serializers.Serializer):
+    """Serializer for validating image uploads."""
+
+    image = serializers.ImageField()
+    folder = serializers.CharField(required=False, allow_blank=True)
+
+
 class ProductImageSerializer(serializers.ModelSerializer):
     """Additional images for a product."""
 

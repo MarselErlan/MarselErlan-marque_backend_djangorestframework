@@ -4,6 +4,8 @@ Integration tests for products API endpoints.
 
 from decimal import Decimal
 
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -23,8 +25,6 @@ class ProductAPIViewTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.client = APIClient()
-
         # Categories and subcategories
         cls.category = Category.objects.create(
             name="Мужчинам",
@@ -151,6 +151,9 @@ class ProductAPIViewTests(TestCase):
             market="KG",
         )
 
+    def setUp(self):
+        self.client = APIClient()
+
     def test_products_list_returns_active_products(self):
         """GET /api/v1/products should return active in-stock products with totals."""
         response = self.client.get("/api/v1/products")
@@ -259,4 +262,40 @@ class ProductAPIViewTests(TestCase):
         slugs_us = {item["slug"] for item in response_us.data}
         self.assertIn("usa-hoodie", slugs_us)
         self.assertEqual(response_us["X-Currency-Code"], "USD")
+
+    def test_product_image_upload_requires_authentication(self):
+        """Uploading without credentials should be rejected."""
+        response = self.client.post("/api/v1/upload/image", format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_product_image_upload_success(self):
+        """Authenticated users can upload images and receive URL + metadata."""
+        self.client.force_authenticate(user=self.user)
+        gif_bytes = (
+            b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00"
+            b"\xff\xff\xff!\xf9\x04\x01\n\x00\x01\x00,\x00\x00\x00"
+            b"\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        )
+        image_file = SimpleUploadedFile(
+            "sample.gif",
+            gif_bytes,
+            content_type="image/gif",
+        )
+
+        response = self.client.post(
+            "/api/v1/upload/image",
+            {"image": image_file, "folder": "catalog"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data["success"])
+        self.assertIn("url", response.data)
+
+        saved_path = response.data["path"]
+        self.assertTrue(default_storage.exists(saved_path))
+
+        # Clean up uploaded file
+        default_storage.delete(saved_path)
+        self.client.force_authenticate(user=None)
 

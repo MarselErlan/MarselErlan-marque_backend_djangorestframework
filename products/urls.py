@@ -12,6 +12,7 @@ from .views import (
     ProductDetailView,
     ProductListView,
     ProductSearchView,
+    ProductImageUploadView,
     SubcategoryProductsView,
 )
 
@@ -38,6 +39,9 @@ urlpatterns = [
     # Detail endpoint (slug or numeric ID)
     path("products/<str:identifier>", ProductDetailView.as_view(), name="product-detail"),
     path("products/<str:identifier>/", ProductDetailView.as_view(), name="product-detail-slash"),
+
+    # Image upload endpoint
+    re_path(r"^upload/image/?$", ProductImageUploadView.as_view(), name="product-image-upload"),
 
     # Legacy subcategory endpoint without category slug
     re_path(

@@ -4,12 +4,17 @@ Product API views.
 These endpoints power the product catalogue for the Next.js storefront.
 """
 
+import os
 from typing import Optional, Tuple
+from uuid import uuid4
 
+from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db.models import Count, Max, Min, Prefetch, Q
 from django.utils.text import slugify
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,6 +23,7 @@ from .models import Category, Product, Subcategory
 from .serializers import (
     CategoryDetailSerializer,
     CategoryListSerializer,
+    ImageUploadSerializer,
     ProductDetailSerializer,
     ProductListSerializer,
     SubcategoryListSerializer,
@@ -410,6 +416,48 @@ class SubcategoryProductsView(MarketAwareAPIView):
         }
 
         return Response(response_payload, status=status.HTTP_200_OK)
+
+
+class ProductImageUploadView(APIView):
+    """
+    POST /api/v1/upload/image
+    Accepts multipart image files and stores them under MEDIA_ROOT/uploads/products/.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        serializer = ImageUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        image = serializer.validated_data["image"]
+        folder = serializer.validated_data.get("folder") or "products"
+
+        # Ensure folder path is safe
+        safe_folder = slugify(folder) if folder else "products"
+        filename_root, extension = os.path.splitext(image.name)
+        if not extension:
+            extension = ".jpg"
+
+        unique_filename = f"{uuid4().hex}{extension.lower()}"
+        relative_path = os.path.join("uploads", safe_folder, unique_filename)
+
+        saved_path = default_storage.save(relative_path, image)
+        file_url = request.build_absolute_uri(default_storage.url(saved_path))
+
+        return Response(
+            {
+                "success": True,
+                "url": file_url,
+                "path": saved_path.replace("\\", "/"),
+                "filename": os.path.basename(saved_path),
+                "original_filename": image.name,
+                "content_type": getattr(image, "content_type", None),
+                "size": image.size,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProductListView(MarketAwareAPIView):
