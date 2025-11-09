@@ -5,13 +5,15 @@ These endpoints power the product catalogue for the Next.js storefront.
 """
 
 import os
+from io import BytesIO
 from typing import Optional, Tuple
 from uuid import uuid4
 
-from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Count, Max, Min, Prefetch, Q
 from django.utils.text import slugify
+from PIL import Image, UnidentifiedImageError
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -431,19 +433,63 @@ class ProductImageUploadView(APIView):
         serializer = ImageUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        image = serializer.validated_data["image"]
+        upload = serializer.validated_data["image"]
         folder = serializer.validated_data.get("folder") or "products"
+
+        # Validate image using Pillow
+        try:
+            upload.seek(0)
+            pil_image = Image.open(upload)
+            pil_image.verify()
+            upload.seek(0)
+            pil_image = Image.open(upload)
+        except (UnidentifiedImageError, OSError):
+            return Response(
+                {"detail": "Invalid or unsupported image file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        original_format = (pil_image.format or "").upper()
+        has_alpha = pil_image.mode in ("RGBA", "LA", "P")
+
+        if has_alpha and pil_image.mode != "RGBA":
+            pil_image = pil_image.convert("RGBA")
+        elif not has_alpha and pil_image.mode not in ("RGB", "L"):
+            pil_image = pil_image.convert("RGB")
+
+        # Resize if image exceeds 2048px on any side
+        max_side = 2048
+        if max(pil_image.size) > max_side:
+            pil_image.thumbnail((max_side, max_side), Image.LANCZOS)
+
+        # Decide output format
+        if has_alpha:
+            target_format = "PNG"
+            extension = ".png"
+            content_type = "image/png"
+        elif original_format in {"JPEG", "JPG"}:
+            target_format = "JPEG"
+            extension = ".jpg"
+            content_type = "image/jpeg"
+        else:
+            target_format = "JPEG"
+            extension = ".jpg"
+            content_type = "image/jpeg"
+
+        buffer = BytesIO()
+        save_kwargs = {
+            "format": target_format,
+        }
+        if target_format == "JPEG":
+            save_kwargs.update({"quality": 85, "optimize": True})
+        pil_image.save(buffer, **save_kwargs)
+        buffer.seek(0)
 
         # Ensure folder path is safe
         safe_folder = slugify(folder) if folder else "products"
-        filename_root, extension = os.path.splitext(image.name)
-        if not extension:
-            extension = ".jpg"
-
-        unique_filename = f"{uuid4().hex}{extension.lower()}"
+        unique_filename = f"{uuid4().hex}{extension}"
         relative_path = os.path.join("uploads", safe_folder, unique_filename)
-
-        saved_path = default_storage.save(relative_path, image)
+        saved_path = default_storage.save(relative_path, ContentFile(buffer.getvalue()))
         file_url = request.build_absolute_uri(default_storage.url(saved_path))
 
         return Response(
@@ -452,9 +498,11 @@ class ProductImageUploadView(APIView):
                 "url": file_url,
                 "path": saved_path.replace("\\", "/"),
                 "filename": os.path.basename(saved_path),
-                "original_filename": image.name,
-                "content_type": getattr(image, "content_type", None),
-                "size": image.size,
+                "original_filename": upload.name,
+                "content_type": content_type,
+                "size": buffer.getbuffer().nbytes,
+                "width": pil_image.width,
+                "height": pil_image.height,
             },
             status=status.HTTP_201_CREATED,
         )
