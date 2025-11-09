@@ -25,12 +25,13 @@ except ImportError:
     TWILIO_AVAILABLE = False
     TwilioException = Exception
 
+from orders.models import Order
 from .models import Address, PaymentMethod, Notification
 from .serializers import (
     UserSerializer, UserUpdateSerializer,
     AddressSerializer, AddressCreateSerializer,
     PaymentMethodSerializer, PaymentMethodCreateSerializer,
-    NotificationSerializer,
+    NotificationSerializer, OrderListSerializer, OrderDetailSerializer,
     SendVerificationSerializer, VerifyCodeSerializer
 )
 
@@ -374,7 +375,12 @@ class AddressViewSet(viewsets.ModelViewSet):
         """Update address"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = AddressCreateSerializer(instance, data=request.data, partial=partial)
+        serializer = AddressCreateSerializer(
+            instance,
+            data=request.data,
+            partial=partial,
+            context=self.get_serializer_context()
+        )
         
         if serializer.is_valid():
             address = serializer.save()
@@ -392,6 +398,8 @@ class AddressViewSet(viewsets.ModelViewSet):
                 'address': AddressSerializer(address).data
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
     
     def destroy(self, request, *args, **kwargs):
         """Delete address"""
@@ -501,6 +509,89 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         return Response({
             'success': True,
             'message': 'Payment method deleted successfully'
+        }, status=status.HTTP_200_OK)
+
+
+# ===========================
+# ORDER VIEWS
+# ===========================
+
+class OrderViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for managing user orders
+    GET /api/v1/profile/orders - List orders
+    GET /api/v1/profile/orders/{id} - Order detail
+    POST /api/v1/profile/orders/{id}/cancel - Cancel order (custom action)
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = OrderListSerializer
+
+    def get_queryset(self):
+        """Return orders for the current user with optional status filter"""
+        queryset = (
+            Order.objects
+            .filter(user=self.request.user)
+            .select_related('shipping_address', 'payment_method_used')
+            .prefetch_related('items')
+            .order_by('-order_date')
+        )
+
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return OrderDetailSerializer
+        return OrderListSerializer
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        limit = int(request.query_params.get('limit', 20))
+        offset = int(request.query_params.get('offset', 0))
+
+        total = queryset.count()
+        orders = queryset[offset:offset + limit]
+        serializer = self.get_serializer(orders, many=True)
+        has_more = (offset + limit) < total
+
+        return Response({
+            'success': True,
+            'orders': serializer.data,
+            'total': total,
+            'has_more': has_more
+        }, status=status.HTTP_200_OK)
+
+    def retrieve(self, request, *args, **kwargs):
+        order = self.get_object()
+        serializer = self.get_serializer(order)
+        return Response({
+            'success': True,
+            'order': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='cancel')
+    def cancel_order(self, request, pk=None):
+        """Allow user to cancel an order if still pending/confirmed"""
+        order = self.get_object()
+
+        if not order.can_cancel:
+            return Response({
+                'success': False,
+                'message': 'Order cannot be cancelled at this stage.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        order.status = 'cancelled'
+        order.cancelled_date = timezone.now()
+        order.save(update_fields=['status', 'cancelled_date', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'message': 'Order cancelled successfully.',
+            'order_id': order.id,
+            'status': order.status
         }, status=status.HTTP_200_OK)
 
 

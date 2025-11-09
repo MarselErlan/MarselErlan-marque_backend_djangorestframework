@@ -181,6 +181,14 @@ class Address(models.Model):
         ('KG', 'Kyrgyzstan'),
         ('US', 'United States'),
     ]
+    COUNTRY_CHOICES = [
+        ('Kyrgyzstan', 'Kyrgyzstan'),
+        ('United States', 'United States'),
+    ]
+    MARKET_COUNTRY_MAP = {
+        'KG': 'Kyrgyzstan',
+        'US': 'United States',
+    }
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
     market = models.CharField(max_length=2, choices=MARKET_CHOICES, default='KG', db_index=True)
@@ -192,7 +200,7 @@ class Address(models.Model):
     city = models.CharField(max_length=100, null=True, blank=True)
     state = models.CharField(max_length=100, null=True, blank=True)  # For US addresses
     postal_code = models.CharField(max_length=20, null=True, blank=True)
-    country = models.CharField(max_length=100, default='Kyrgyzstan')
+    country = models.CharField(max_length=100, choices=COUNTRY_CHOICES, default='Kyrgyzstan')
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -210,14 +218,20 @@ class Address(models.Model):
         return f"{self.title} - {self.full_address}"
     
     def save(self, *args, **kwargs):
-        # Auto-populate market and country from user on creation
-        if not self.pk and self.user:
-            self.market = self.user.market
-            self.country = 'Kyrgyzstan' if self.market == 'KG' else 'United States'
+        # Auto-populate market and country from user
+        if self.user:
+            if not self.market:
+                self.market = self.user.market
+            if self.market in self.MARKET_COUNTRY_MAP:
+                self.country = self.MARKET_COUNTRY_MAP[self.market]
         
         # If this address is set as default, unset other defaults for same market
-        if self.is_default:
-            Address.objects.filter(user=self.user, market=self.market, is_default=True).exclude(pk=self.pk).update(is_default=False)
+        if self.is_default and self.user_id:
+            Address.objects.filter(
+                user=self.user,
+                market=self.market,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
 
 

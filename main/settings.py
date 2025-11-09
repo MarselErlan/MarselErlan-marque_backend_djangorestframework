@@ -56,7 +56,6 @@ for env_var in ('RAILWAY_PUBLIC_DOMAIN', 'RAILWAY_DOMAIN'):
 # Application definition
 
 INSTALLED_APPS = [
-    'jazzmin',  # Must be before django.contrib.admin
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

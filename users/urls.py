@@ -7,7 +7,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     SendVerificationView, VerifyCodeView, LogoutView, ProfileView,
-    AddressViewSet, PaymentMethodViewSet, NotificationViewSet
+    AddressViewSet, PaymentMethodViewSet, NotificationViewSet,
+    OrderViewSet,
 )
 
 # Create router for ViewSets
@@ -15,6 +16,7 @@ router = DefaultRouter()
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
 router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'orders', OrderViewSet, basename='order')
 
 # URL patterns
 urlpatterns = [

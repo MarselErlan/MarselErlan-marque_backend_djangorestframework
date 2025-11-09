@@ -5,6 +5,7 @@ Handles serialization/deserialization of User, Address, PaymentMethod, Notificat
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from orders.models import Order, OrderItem
 from .models import Address, PaymentMethod, VerificationCode, Notification
 
 User = get_user_model()
@@ -52,13 +53,14 @@ class AddressSerializer(serializers.ModelSerializer):
             'apartment', 'city', 'state', 'postal_code', 'country',
             'is_default', 'market', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'market', 'country', 'created_at', 'updated_at']
     
     def create(self, validated_data):
         # Auto-set market from user
         user = self.context['request'].user
         validated_data['user'] = user
         validated_data['market'] = user.market
+        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(user.market, 'Kyrgyzstan')
         
         # If this is set as default, unset other defaults
         if validated_data.get('is_default', False):
@@ -67,6 +69,10 @@ class AddressSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
+        market = instance.user.market if instance.user else instance.market
+        validated_data['market'] = market
+        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(market, instance.country)
+        
         # If this is being set as default, unset other defaults
         if validated_data.get('is_default', False) and not instance.is_default:
             Address.objects.filter(user=instance.user, is_default=True).update(is_default=False)
@@ -77,12 +83,56 @@ class AddressSerializer(serializers.ModelSerializer):
 class AddressCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating addresses (no user field required)"""
     
+    MARKET_REQUIRED_FIELDS = {
+        'KG': ['title', 'full_address', 'city'],
+        'US': ['title', 'full_address', 'street', 'city', 'state', 'postal_code'],
+    }
+    
     class Meta:
         model = Address
         fields = [
             'title', 'full_address', 'street', 'building', 'apartment',
             'city', 'state', 'postal_code', 'country', 'is_default'
         ]
+        read_only_fields = ['country']
+    
+    def _get_market(self):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            return request.user.market
+        if self.instance:
+            return self.instance.market
+        return 'KG'
+    
+    def validate(self, attrs):
+        market = self._get_market()
+        required_fields = self.MARKET_REQUIRED_FIELDS.get(market, ['title', 'full_address'])
+        
+        for field in required_fields:
+            if field in attrs and attrs[field]:
+                continue
+            if self.instance and getattr(self.instance, field, None):
+                continue
+            raise serializers.ValidationError({field: 'This field is required for this market.'})
+        
+        return attrs
+    
+    def create(self, validated_data):
+        request = self.context.get('request')
+        user = request.user if request else None
+        if not user:
+            raise serializers.ValidationError("Authenticated user is required.")
+        
+        validated_data['user'] = user
+        validated_data['market'] = user.market
+        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(user.market, 'Kyrgyzstan')
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        market = self._get_market()
+        validated_data['market'] = market
+        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(market, instance.country)
+        return super().update(instance, validated_data)
 
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
@@ -163,6 +213,88 @@ class NotificationSerializer(serializers.ModelSerializer):
             'order_id', 'market', 'created_at'
         ]
         read_only_fields = ['id', 'user', 'created_at']
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    """Serializer for order item snapshots"""
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'product_name',
+            'quantity',
+            'price',
+            'subtotal',
+            'image_url',
+        ]
+
+
+class OrderListSerializer(serializers.ModelSerializer):
+    """Serializer for orders list"""
+
+    items = OrderItemSerializer(many=True, read_only=True)
+    items_count = serializers.IntegerField(read_only=True)
+    delivery_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            'id',
+            'order_number',
+            'status',
+            'total_amount',
+            'currency',
+            'order_date',
+            'delivery_date',
+            'delivery_address',
+            'items_count',
+            'items',
+        ]
+
+    def get_delivery_date(self, obj):
+        delivery = obj.delivery_date
+        return delivery.isoformat() if delivery else None
+
+
+class OrderDetailSerializer(serializers.ModelSerializer):
+    """Serializer for detailed order view"""
+
+    items = OrderItemSerializer(many=True, read_only=True)
+    delivery_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            'id',
+            'order_number',
+            'status',
+            'customer_name',
+            'customer_phone',
+            'delivery_address',
+            'delivery_city',
+            'delivery_state',
+            'delivery_postal_code',
+            'delivery_country',
+            'delivery_notes',
+            'subtotal',
+            'shipping_cost',
+            'tax',
+            'total_amount',
+            'currency',
+            'order_date',
+            'confirmed_date',
+            'shipped_date',
+            'delivered_date',
+            'payment_method',
+            'payment_status',
+            'card_type',
+            'card_last_four',
+            'items',
+        ]
+
+    def get_delivery_date(self, obj):
+        delivery = obj.delivery_date
+        return delivery.isoformat() if delivery else None
 
 
 # Authentication Serializers
