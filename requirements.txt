@@ -27,3 +27,6 @@ pytest-django==4.8.0
 # Production server
 gunicorn==21.2.0
 
+# Static files (production)
+whitenoise==6.6.0
+
