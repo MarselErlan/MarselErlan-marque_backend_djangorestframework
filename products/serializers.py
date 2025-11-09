@@ -92,9 +92,14 @@ class ProductImageSerializer(serializers.ModelSerializer):
         model = ProductImage
         fields = ("id", "url", "alt_text", "sort_order")
 
-    @staticmethod
-    def get_url(obj: ProductImage) -> str:
-        return obj.image_url
+    def get_url(self, obj: ProductImage) -> Optional[str]:
+        if not obj.image:
+            return None
+        request = self.context.get("request") if hasattr(self, "context") else None
+        url = obj.image.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class SKUSerializer(serializers.ModelSerializer):
@@ -102,6 +107,7 @@ class SKUSerializer(serializers.ModelSerializer):
 
     price = serializers.SerializerMethodField()
     original_price = serializers.SerializerMethodField()
+    variant_image = serializers.SerializerMethodField()
 
     class Meta:
         model = SKU
@@ -126,6 +132,13 @@ class SKUSerializer(serializers.ModelSerializer):
 
     def get_original_price(self, obj: SKU) -> Optional[float]:
         return self._decimal_to_float(obj.original_price)
+
+    def get_variant_image(self, obj: SKU) -> Optional[str]:
+        if not obj.variant_image:
+            return None
+        request = self.context.get("request") if hasattr(self, "context") else None
+        url = obj.variant_image.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class ProductSerializerMixin:
@@ -195,6 +208,12 @@ class ProductSerializerMixin:
             "slug": brand_slug,
         }
 
+    def _build_absolute_uri(self, path: Optional[str]) -> Optional[str]:
+        if not path:
+            return None
+        request = self.context.get("request") if hasattr(self, "context") else None
+        return request.build_absolute_uri(path) if request else path
+
 
 class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer):
     """
@@ -208,7 +227,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     title = serializers.CharField(source="name")
     brand = serializers.SerializerMethodField()
     brand_name = serializers.CharField(source="brand", read_only=True)
-    image = serializers.CharField()
+    image = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
     price_min = serializers.SerializerMethodField()
     price_max = serializers.SerializerMethodField()
@@ -255,6 +274,11 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
 
     def get_brand(self, obj: Product) -> Dict[str, Optional[str]]:
         return self._brand_payload(obj)
+
+    def get_image(self, obj: Product) -> Optional[str]:
+        if not obj.image:
+            return None
+        return self._build_absolute_uri(obj.image.url)
 
     def _price_payload(self, obj: Product) -> Dict[str, Optional[float]]:
         cache_key = obj.pk or id(obj)
@@ -346,7 +370,11 @@ class ProductDetailSerializer(ProductListSerializer):
         )
 
     def get_skus(self, obj: Product) -> List[OrderedDict]:
-        serializer = SKUSerializer(self._active_skus(obj), many=True)
+        serializer = SKUSerializer(
+            self._active_skus(obj),
+            many=True,
+            context=self.context,
+        )
         return serializer.data
 
     def get_features(self, obj: Product) -> List[str]:

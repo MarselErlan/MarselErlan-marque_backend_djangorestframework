@@ -24,7 +24,7 @@ class SubcategoryAdmin(admin.ModelAdmin):
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 1
-    fields = ('image_url', 'alt_text', 'sort_order')
+    fields = ('image', 'alt_text', 'sort_order')
 
 
 class ProductFeatureInline(admin.TabularInline):

@@ -111,7 +111,7 @@ class Product(models.Model):
     discount = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])  # Percentage
     
     # Images
-    image = models.URLField(max_length=500)  # Main image
+    image = models.ImageField(upload_to='products/main/', null=True, blank=True)  # Main image
     
     # Ratings and reviews
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.0, validators=[MinValueValidator(0), MaxValueValidator(5)])
@@ -346,7 +346,7 @@ class ProductImage(models.Model):
     """Additional product images"""
     
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image_url = models.URLField(max_length=500)
+    image = models.ImageField(upload_to='products/gallery/', null=True, blank=True)
     alt_text = models.CharField(max_length=255, null=True, blank=True)
     sort_order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -396,7 +396,7 @@ class SKU(models.Model):
     stock = models.IntegerField(default=0, validators=[MinValueValidator(0)])
     
     # Variant image
-    variant_image = models.URLField(max_length=500, null=True, blank=True)
+    variant_image = models.ImageField(upload_to='products/variants/', null=True, blank=True)
     
     # Status
     is_active = models.BooleanField(default=True)
