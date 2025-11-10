@@ -75,6 +75,12 @@ INSTALLED_APPS = [
     'banners',
     'store_manager',
     'ai_assistant',  # AI-powered product recommendations
+    
+    # Pillow is required for image processing
+    'Pillow',
+    # Swagger
+    'drf_spectacular',  # Swagger UI
+    'drf_spectacular_sidecar',  # Swagger UI sidecar
 ]
 
 MIDDLEWARE = [
@@ -180,6 +186,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
+    
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
@@ -198,6 +205,8 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
 }
 
 # CORS Configuration (will need django-cors-headers)

@@ -178,8 +178,8 @@ Product is now searchable via AI
 ### ⏳ Step 1: Add to `.env`
 
 ```bash
-PINECONE_API_KEY=pcsk_3Sxd5N_KpGG7jGYGYqbb1Sobrt2HGi9gAj91Q5ay9bpUT3W7KSfCignYgmskq7ESLU6rX
-PINECONE_HOST=https://marque-93wonvo.svc.aped-4627-b74a.pinecone.io
+PINECONE_API_KEY=key
+PINECONE_HOST=host
 ```
 
 **📋 Copy from:** `PINECONE_ENV_TEMPLATE.txt`

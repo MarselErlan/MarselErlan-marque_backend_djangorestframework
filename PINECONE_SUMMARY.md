@@ -97,7 +97,7 @@ sentence-transformers==5.1.2
 
 ```env
 PINECONE_API_KEY=pcsk_your-api-key-here
-PINECONE_HOST=https://your-index.pinecone.io
+PINECONE_HOST=host
 ```
 
 ### 5. `README.md`, `CHANGELOG.md`
@@ -113,8 +113,8 @@ Updated with Pinecone documentation references.
 Add to your `.env` file:
 
 ```bash
-PINECONE_API_KEY=pcsk_3Sxd5N_KpGG7jGYGYqbb1Sobrt2HGi9gAj91Q5ay9bpUT3W7KSfCignYgmskq7ESLU6rX
-PINECONE_HOST=https://marque-93wonvo.svc.aped-4627-b74a.pinecone.io
+PINECONE_API_KEY=key
+PINECONE_HOST=host
 ```
 
 _(See `PINECONE_ENV_TEMPLATE.txt` for easy copy-paste)_
@@ -434,8 +434,8 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org pineco
 
    ```bash
    # Copy from PINECONE_ENV_TEMPLATE.txt
-   PINECONE_API_KEY=pcsk_3Sxd5N_KpGG7jGYGYqbb1Sobrt2HGi9gAj91Q5ay9bpUT3W7KSfCignYgmskq7ESLU6rX
-   PINECONE_HOST=https://marque-93wonvo.svc.aped-4627-b74a.pinecone.io
+   PINECONE_API_KEY=key
+   PINECONE_HOST=host
    ```
 
 2. **Sync existing products**
