@@ -12,7 +12,7 @@ class BannerAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Content', {
-            'fields': ('title', 'subtitle', 'image_url')
+            'fields': ('title', 'subtitle', 'image', 'image_url')
         }),
         ('Type & Settings', {
             'fields': ('banner_type', 'market', 'is_active', 'sort_order')

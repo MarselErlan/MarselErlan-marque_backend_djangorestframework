@@ -20,7 +20,8 @@ class Banner(models.Model):
     # Content
     title = models.CharField(max_length=255)
     subtitle = models.CharField(max_length=500, null=True, blank=True)
-    image_url = models.URLField(max_length=500)
+    image = models.ImageField(upload_to='banners/', null=True, blank=True)
+    image_url = models.URLField(max_length=500, null=True, blank=True)
     
     # Type & Market
     banner_type = models.CharField(max_length=20, choices=BANNER_TYPE_CHOICES, default='hero', db_index=True)

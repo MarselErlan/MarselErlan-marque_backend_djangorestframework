@@ -32,7 +32,11 @@ class BannerSerializer(serializers.ModelSerializer):
         )
 
     def get_image_url(self, obj: Banner) -> Optional[str]:
-        url = obj.image_url
+        if obj.image:
+            url = obj.image.url
+        else:
+            url = obj.image_url
+
         if not url:
             return None
 
