@@ -285,6 +285,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'confirmed_date',
             'shipped_date',
             'delivered_date',
+            'delivery_date',
             'payment_method',
             'payment_status',
             'card_type',

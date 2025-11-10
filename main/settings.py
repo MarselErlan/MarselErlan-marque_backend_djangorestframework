@@ -75,6 +75,9 @@ INSTALLED_APPS = [
     'banners',
     'store_manager',
     'ai_assistant',  # AI-powered product recommendations
+
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     
 
 ]
@@ -227,3 +230,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+SPECTACULAR_SETTINGS = {
+       
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
+}
