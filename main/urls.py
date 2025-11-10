@@ -25,6 +25,7 @@ urlpatterns = [
     # API v1 endpoints
     path('api/v1/', include('users.urls')),  # Authentication & Profile
     path('api/v1/', include('products.urls')),  # Product catalogue
+    path('api/v1/', include('banners.urls')),  # Banners
     path('api/ai/', include('ai_assistant.urls')),  # AI-powered recommendations
 ]
 

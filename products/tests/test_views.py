@@ -315,6 +315,7 @@ class ProductAPIViewTests(TestCase):
         self.assertEqual(response.data["user_id"], self.user.id)
         self.assertEqual(response.data["items"], [])
         self.assertEqual(response.data["total_items"], 0)
+        self.assertEqual(response.data["total_price"], 0.0)
 
     def test_cart_add_and_update_flow(self):
         """Adding, updating, and removing items should adjust cart totals."""
@@ -325,7 +326,15 @@ class ProductAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total_items"], 2)
-        item_id = response.data["items"][0]["id"]
+        self.assertAlmostEqual(response.data["total_price"], float(self.sku1.price) * 2)
+        item_payload = response.data["items"][0]
+        item_id = item_payload["id"]
+        self.assertEqual(item_payload["sku_id"], self.sku1.id)
+        self.assertEqual(item_payload["product_id"], self.product.id)
+        self.assertEqual(item_payload["quantity"], 2)
+        self.assertEqual(item_payload["size"], self.sku1.size)
+        self.assertEqual(item_payload["color"], self.sku1.color)
+        self.assertIn("image", item_payload)
 
         # Update quantity
         response = self.client.post(
@@ -335,6 +344,7 @@ class ProductAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total_items"], 3)
+        self.assertAlmostEqual(response.data["total_price"], float(self.sku1.price) * 3)
 
         # Remove item
         response = self.client.post(
@@ -344,6 +354,8 @@ class ProductAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total_items"], 0)
+        self.assertEqual(response.data["items"], [])
+        self.assertEqual(response.data["total_price"], 0.0)
 
     def test_cart_clear_endpoint(self):
         """Clear endpoint should remove all items."""
@@ -364,6 +376,8 @@ class ProductAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total_items"], 0)
+        self.assertEqual(response.data["items"], [])
+        self.assertEqual(response.data["total_price"], 0.0)
 
     def test_wishlist_add_and_remove(self):
         """Wishlist endpoints should add and remove products."""
@@ -374,6 +388,11 @@ class ProductAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["items"]), 1)
+        wishlist_item = response.data["items"][0]
+        self.assertEqual(wishlist_item["product"]["id"], self.product.id)
+        self.assertEqual(wishlist_item["product"]["brand"]["name"], self.product.brand)
+        self.assertIn("price_min", wishlist_item["product"])
+        self.assertIn("available_sizes", wishlist_item["product"])
 
         response = self.client.post(
             "/api/v1/wishlist/remove",
@@ -403,4 +422,29 @@ class ProductAPIViewTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
         self.assertEqual(len(response.data["items"]), 0)
+
+    def test_wishlist_get_returns_structure(self):
+        """Wishlist get should include expected fields even when empty."""
+        response = self.client.post(
+            "/api/v1/wishlist/get",
+            {"user_id": self.user.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("items", response.data)
+        self.assertEqual(response.data["items"], [])
+
+    def test_cart_requires_user_id(self):
+        """Cart endpoints should validate payloads."""
+        response = self.client.post("/api/v1/cart/get", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_wishlist_add_requires_product_id(self):
+        """Wishlist add should reject missing product id."""
+        response = self.client.post(
+            "/api/v1/wishlist/add",
+            {"user_id": self.user.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
