@@ -17,10 +17,17 @@ from django.db.models import Count, Max, Min, Prefetch, Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 from rest_framework import status
+from rest_framework import serializers
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiTypes,
+    extend_schema,
+    inline_serializer,
+)
 
 from orders.models import Review
 from .models import (
@@ -42,6 +49,16 @@ from .serializers import (
     SubcategoryListSerializer,
     CartSerializer,
     WishlistSerializer,
+    CartGetRequestSerializer,
+    CartAddRequestSerializer,
+    CartUpdateRequestSerializer,
+    CartRemoveRequestSerializer,
+    CartClearRequestSerializer,
+    WishlistGetRequestSerializer,
+    WishlistAddRequestSerializer,
+    WishlistRemoveRequestSerializer,
+    WishlistClearRequestSerializer,
+    WishlistClearResponseSerializer,
 )
 from .utils import filter_by_market, get_market_currency, get_user_market_from_phone
 
@@ -442,6 +459,27 @@ class ProductImageUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
 
+    @extend_schema(
+        summary="Upload a product image",
+        tags=["media"],
+        request=ImageUploadSerializer,
+        responses={
+            201: inline_serializer(
+                name="ProductImageUploadResponse",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "url": serializers.CharField(),
+                    "path": serializers.CharField(),
+                    "filename": serializers.CharField(),
+                    "original_filename": serializers.CharField(),
+                    "content_type": serializers.CharField(),
+                    "size": serializers.IntegerField(),
+                    "width": serializers.IntegerField(),
+                    "height": serializers.IntegerField(),
+                },
+            )
+        },
+    )
     def post(self, request):
         serializer = ImageUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -573,6 +611,12 @@ class CartBaseView(BaseUserLookupMixin, APIView):
 class CartGetView(CartBaseView):
     """POST /cart/get"""
 
+    @extend_schema(
+        summary="Fetch current cart",
+        tags=["cart"],
+        request=CartGetRequestSerializer,
+        responses={200: CartSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -584,6 +628,12 @@ class CartGetView(CartBaseView):
 class CartAddView(CartBaseView):
     """POST /cart/add"""
 
+    @extend_schema(
+        summary="Add item to cart",
+        tags=["cart"],
+        request=CartAddRequestSerializer,
+        responses={200: CartSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -627,6 +677,12 @@ class CartAddView(CartBaseView):
 class CartUpdateView(CartBaseView):
     """POST /cart/update"""
 
+    @extend_schema(
+        summary="Update cart item quantity",
+        tags=["cart"],
+        request=CartUpdateRequestSerializer,
+        responses={200: CartSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -672,6 +728,12 @@ class CartUpdateView(CartBaseView):
 class CartRemoveView(CartBaseView):
     """POST /cart/remove"""
 
+    @extend_schema(
+        summary="Remove item from cart",
+        tags=["cart"],
+        request=CartRemoveRequestSerializer,
+        responses={200: CartSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -700,6 +762,12 @@ class CartRemoveView(CartBaseView):
 class CartClearView(CartBaseView):
     """POST /cart/clear"""
 
+    @extend_schema(
+        summary="Clear cart",
+        tags=["cart"],
+        request=CartClearRequestSerializer,
+        responses={200: CartSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -724,6 +792,12 @@ class WishlistBaseView(BaseUserLookupMixin, APIView):
 class WishlistGetView(WishlistBaseView):
     """POST /wishlist/get"""
 
+    @extend_schema(
+        summary="Fetch wishlist",
+        tags=["wishlist"],
+        request=WishlistGetRequestSerializer,
+        responses={200: WishlistSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -735,6 +809,12 @@ class WishlistGetView(WishlistBaseView):
 class WishlistAddView(WishlistBaseView):
     """POST /wishlist/add"""
 
+    @extend_schema(
+        summary="Add product to wishlist",
+        tags=["wishlist"],
+        request=WishlistAddRequestSerializer,
+        responses={200: WishlistSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -764,6 +844,12 @@ class WishlistAddView(WishlistBaseView):
 class WishlistRemoveView(WishlistBaseView):
     """POST /wishlist/remove"""
 
+    @extend_schema(
+        summary="Remove product from wishlist",
+        tags=["wishlist"],
+        request=WishlistRemoveRequestSerializer,
+        responses={200: WishlistSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:
@@ -785,6 +871,12 @@ class WishlistRemoveView(WishlistBaseView):
 class WishlistClearView(WishlistBaseView):
     """POST /wishlist/clear"""
 
+    @extend_schema(
+        summary="Clear wishlist",
+        tags=["wishlist"],
+        request=WishlistClearRequestSerializer,
+        responses={200: WishlistClearResponseSerializer},
+    )
     def post(self, request):
         user, error = self.parse_user_id(request)
         if error:

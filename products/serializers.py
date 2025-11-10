@@ -623,3 +623,75 @@ class WishlistSerializer(serializers.ModelSerializer):
         return serializer.data
 
 
+class WishlistClearResponseSerializer(WishlistSerializer):
+    """Serializer for wishlist payload returned after a clear operation."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+
+    class Meta(WishlistSerializer.Meta):
+        fields = ("success", "message") + WishlistSerializer.Meta.fields
+
+
+class StatelessUserRequestSerializer(serializers.Serializer):
+    """Base request serializer for stateless cart & wishlist endpoints."""
+
+    user_id = serializers.IntegerField(min_value=1)
+
+
+class CartGetRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for retrieving a user's cart."""
+
+    pass
+
+
+class CartAddRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for adding an item to the cart."""
+
+    sku_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1, required=False, default=1)
+
+
+class CartUpdateRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for updating a cart item's quantity."""
+
+    cart_item_id = serializers.IntegerField()
+    quantity = serializers.IntegerField()
+
+
+class CartRemoveRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for removing an item from the cart."""
+
+    cart_item_id = serializers.IntegerField()
+
+
+class CartClearRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for clearing a cart."""
+
+    pass
+
+
+class WishlistGetRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for retrieving a wishlist."""
+
+    pass
+
+
+class WishlistAddRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for adding a product to the wishlist."""
+
+    product_id = serializers.IntegerField()
+
+
+class WishlistRemoveRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for removing a product from the wishlist."""
+
+    product_id = serializers.IntegerField()
+
+
+class WishlistClearRequestSerializer(StatelessUserRequestSerializer):
+    """Request body for clearing a wishlist."""
+
+    pass
+
+

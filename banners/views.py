@@ -6,9 +6,16 @@ from typing import Dict, Optional
 
 from django.utils import timezone
 from django.db.models import Q
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiTypes,
+    extend_schema,
+    inline_serializer,
+)
 
 from .models import Banner
 from .serializers import BannerSerializer
@@ -65,6 +72,35 @@ class BannerListView(BannerBaseView):
     Returns hero/promo/category banners grouped with totals.
     """
 
+    @extend_schema(
+        summary="List banners by type",
+        tags=["banners"],
+        parameters=[
+            OpenApiParameter(
+                name="market",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filter by market code (defaults to KG).",
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Limit number of banners per section.",
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                name="BannerGroupedResponse",
+                fields={
+                    "hero_banners": BannerSerializer(many=True),
+                    "promo_banners": BannerSerializer(many=True),
+                    "category_banners": BannerSerializer(many=True),
+                    "total": serializers.IntegerField(),
+                },
+            )
+        },
+    )
     def get(self, request):
         limit = request.query_params.get("limit")
         try:
@@ -99,6 +135,25 @@ class BannerTypeListView(BannerBaseView):
 
     banner_type = None
 
+    @extend_schema(
+        summary="List banners of a single type",
+        tags=["banners"],
+        parameters=[
+            OpenApiParameter(
+                name="market",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filter by market code (defaults to KG).",
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Limit number of banners returned.",
+            ),
+        ],
+        responses={200: BannerSerializer(many=True)},
+    )
     def get(self, request):
         if not self.banner_type:
             return Response(

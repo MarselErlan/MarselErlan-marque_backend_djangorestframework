@@ -3,12 +3,13 @@ Views for Users App
 Handles authentication, profile management, addresses, payment methods, and notifications
 """
 
-from rest_framework import status, viewsets
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from drf_spectacular.utils import extend_schema, inline_serializer
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q
@@ -146,6 +147,24 @@ class SendVerificationView(APIView):
     """
     permission_classes = [AllowAny]
     
+    @extend_schema(
+        summary="Send SMS verification code",
+        tags=["auth"],
+        request=SendVerificationSerializer,
+        responses={
+            200: inline_serializer(
+                name="SendVerificationResponse",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "message": serializers.CharField(),
+                    "phone": serializers.CharField(),
+                    "market": serializers.CharField(),
+                    "language": serializers.CharField(),
+                    "expires_in_minutes": serializers.IntegerField(),
+                },
+            )
+        },
+    )
     def post(self, request):
         serializer = SendVerificationSerializer(data=request.data)
         if not serializer.is_valid():
@@ -198,6 +217,34 @@ class VerifyCodeView(APIView):
     """
     permission_classes = [AllowAny]
     
+    @extend_schema(
+        summary="Verify SMS code and obtain token",
+        tags=["auth"],
+        request=VerifyCodeSerializer,
+        responses={
+            200: inline_serializer(
+                name="VerifyCodeResponse",
+                fields={
+                    "access_token": serializers.CharField(),
+                    "token_type": serializers.CharField(),
+                    "expires_in": serializers.IntegerField(),
+                    "user": inline_serializer(
+                        name="VerifyCodeUserPayload",
+                        fields={
+                            "id": serializers.CharField(),
+                            "name": serializers.CharField(),
+                            "phone": serializers.CharField(),
+                            "full_name": serializers.CharField(allow_null=True),
+                            "is_active": serializers.BooleanField(),
+                            "is_verified": serializers.BooleanField(),
+                        },
+                    ),
+                    "market": serializers.CharField(),
+                    "is_new_user": serializers.BooleanField(),
+                },
+            )
+        },
+    )
     def post(self, request):
         serializer = VerifyCodeSerializer(data=request.data)
         if not serializer.is_valid():
@@ -272,6 +319,20 @@ class LogoutView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        summary="Logout the current user",
+        tags=["auth"],
+        request=None,
+        responses={
+            200: inline_serializer(
+                name="LogoutResponse",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "message": serializers.CharField(),
+                },
+            )
+        },
+    )
     def post(self, request):
         try:
             # Delete the user's token
@@ -294,11 +355,22 @@ class ProfileView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        summary="Retrieve current user profile",
+        tags=["auth"],
+        responses={200: UserSerializer},
+    )
     def get(self, request):
         """Get user profile"""
         serializer = UserSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+    @extend_schema(
+        summary="Update current user profile",
+        tags=["auth"],
+        request=UserUpdateSerializer,
+        responses={200: UserSerializer},
+    )
     def put(self, request):
         """Update user profile"""
         serializer = UserUpdateSerializer(request.user, data=request.data, partial=True)
