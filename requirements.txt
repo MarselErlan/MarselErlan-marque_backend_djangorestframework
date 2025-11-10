@@ -29,3 +29,5 @@ gunicorn==21.2.0
 # Static files (production)
 whitenoise==6.6.0
 
+drf-spectacular==0.29.0
+drf-spectacular-sidecar==2025.10.1

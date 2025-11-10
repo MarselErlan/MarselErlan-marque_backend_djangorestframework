@@ -76,8 +76,7 @@ INSTALLED_APPS = [
     'store_manager',
     'ai_assistant',  # AI-powered product recommendations
     
-    # Pillow is required for image processing
-    'Pillow',
+    
     # Swagger
     'drf_spectacular',  # Swagger UI
     'drf_spectacular_sidecar',  # Swagger UI sidecar
