@@ -8,12 +8,21 @@ from .views import (
     CategoryDetailView,
     CategoryListView,
     CategorySubcategoryListView,
+    CartAddView,
+    CartClearView,
+    CartGetView,
+    CartRemoveView,
+    CartUpdateView,
     ProductBestSellerView,
     ProductDetailView,
     ProductListView,
     ProductSearchView,
     ProductImageUploadView,
     SubcategoryProductsView,
+    WishlistAddView,
+    WishlistClearView,
+    WishlistGetView,
+    WishlistRemoveView,
 )
 
 urlpatterns = [
@@ -42,6 +51,19 @@ urlpatterns = [
 
     # Image upload endpoint
     re_path(r"^upload/image/?$", ProductImageUploadView.as_view(), name="product-image-upload"),
+
+    # Cart endpoints (stateless)
+    re_path(r"^cart/get/?$", CartGetView.as_view(), name="cart-get"),
+    re_path(r"^cart/add/?$", CartAddView.as_view(), name="cart-add"),
+    re_path(r"^cart/update/?$", CartUpdateView.as_view(), name="cart-update"),
+    re_path(r"^cart/remove/?$", CartRemoveView.as_view(), name="cart-remove"),
+    re_path(r"^cart/clear/?$", CartClearView.as_view(), name="cart-clear"),
+
+    # Wishlist endpoints (stateless)
+    re_path(r"^wishlist/get/?$", WishlistGetView.as_view(), name="wishlist-get"),
+    re_path(r"^wishlist/add/?$", WishlistAddView.as_view(), name="wishlist-add"),
+    re_path(r"^wishlist/remove/?$", WishlistRemoveView.as_view(), name="wishlist-remove"),
+    re_path(r"^wishlist/clear/?$", WishlistClearView.as_view(), name="wishlist-clear"),
 
     # Legacy subcategory endpoint without category slug
     re_path(

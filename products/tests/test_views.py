@@ -11,11 +11,13 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from products.models import (
+    Cart,
     Category,
     Product,
     ProductFeature,
     SKU,
     Subcategory,
+    Wishlist,
 )
 from users.models import User
 
@@ -150,6 +152,9 @@ class ProductAPIViewTests(TestCase):
             password="password123",
             market="KG",
         )
+
+        cls.sku1 = SKU.objects.filter(product=cls.product, sku_code="MARQUE-S-BLACK").first()
+        cls.sku2 = SKU.objects.filter(product=cls.product_second, sku_code="SPORT-L-RED").first()
 
     def setUp(self):
         self.client = APIClient()
@@ -298,4 +303,104 @@ class ProductAPIViewTests(TestCase):
         # Clean up uploaded file
         default_storage.delete(saved_path)
         self.client.force_authenticate(user=None)
+
+    def test_cart_get_creates_empty_cart(self):
+        """Cart get endpoint should return empty cart for new user."""
+        response = self.client.post(
+            "/api/v1/cart/get",
+            {"user_id": self.user.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user_id"], self.user.id)
+        self.assertEqual(response.data["items"], [])
+        self.assertEqual(response.data["total_items"], 0)
+
+    def test_cart_add_and_update_flow(self):
+        """Adding, updating, and removing items should adjust cart totals."""
+        response = self.client.post(
+            "/api/v1/cart/add",
+            {"user_id": self.user.id, "sku_id": self.sku1.id, "quantity": 2},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_items"], 2)
+        item_id = response.data["items"][0]["id"]
+
+        # Update quantity
+        response = self.client.post(
+            "/api/v1/cart/update",
+            {"user_id": self.user.id, "cart_item_id": item_id, "quantity": 3},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_items"], 3)
+
+        # Remove item
+        response = self.client.post(
+            "/api/v1/cart/remove",
+            {"user_id": self.user.id, "cart_item_id": item_id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_items"], 0)
+
+    def test_cart_clear_endpoint(self):
+        """Clear endpoint should remove all items."""
+        self.client.post(
+            "/api/v1/cart/add",
+            {"user_id": self.user.id, "sku_id": self.sku1.id, "quantity": 1},
+            format="json",
+        )
+        self.client.post(
+            "/api/v1/cart/add",
+            {"user_id": self.user.id, "sku_id": self.sku2.id, "quantity": 2},
+            format="json",
+        )
+        response = self.client.post(
+            "/api/v1/cart/clear",
+            {"user_id": self.user.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_items"], 0)
+
+    def test_wishlist_add_and_remove(self):
+        """Wishlist endpoints should add and remove products."""
+        response = self.client.post(
+            "/api/v1/wishlist/add",
+            {"user_id": self.user.id, "product_id": self.product.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["items"]), 1)
+
+        response = self.client.post(
+            "/api/v1/wishlist/remove",
+            {"user_id": self.user.id, "product_id": self.product.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["items"]), 0)
+
+    def test_wishlist_clear(self):
+        """Clearing wishlist should return success and empty items."""
+        self.client.post(
+            "/api/v1/wishlist/add",
+            {"user_id": self.user.id, "product_id": self.product.id},
+            format="json",
+        )
+        self.client.post(
+            "/api/v1/wishlist/add",
+            {"user_id": self.user.id, "product_id": self.product_second.id},
+            format="json",
+        )
+        response = self.client.post(
+            "/api/v1/wishlist/clear",
+            {"user_id": self.user.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(len(response.data["items"]), 0)
 

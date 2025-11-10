@@ -9,8 +9,10 @@ from io import BytesIO
 from typing import Optional, Tuple
 from uuid import uuid4
 
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import Count, Max, Min, Prefetch, Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
@@ -21,7 +23,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from orders.models import Review
-from .models import Category, Product, Subcategory
+from .models import (
+    Cart,
+    CartItem,
+    Category,
+    Product,
+    SKU,
+    Subcategory,
+    Wishlist,
+    WishlistItem,
+)
 from .serializers import (
     CategoryDetailSerializer,
     CategoryListSerializer,
@@ -29,6 +40,8 @@ from .serializers import (
     ProductDetailSerializer,
     ProductListSerializer,
     SubcategoryListSerializer,
+    CartSerializer,
+    WishlistSerializer,
 )
 from .utils import filter_by_market, get_market_currency, get_user_market_from_phone
 
@@ -505,6 +518,288 @@ class ProductImageUploadView(APIView):
                 "height": pil_image.height,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+User = get_user_model()
+
+
+class BaseUserLookupMixin:
+    """Common helpers for stateless cart & wishlist endpoints."""
+
+    permission_classes = [AllowAny]
+
+    def get_user(self, user_id):
+        try:
+            return User.objects.get(id=user_id)
+        except (User.DoesNotExist, ValueError, TypeError):
+            return None
+
+    def parse_user_id(self, request):
+        user_id = request.data.get("user_id")
+        if user_id is None:
+            return None, Response(
+                {"detail": "user_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return None, Response(
+                {"detail": "user_id must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = self.get_user(user_id)
+        if not user:
+            return None, Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return user, None
+
+
+class CartBaseView(BaseUserLookupMixin, APIView):
+    """Base class for cart operations."""
+
+    def get_cart(self, user):
+        cart, _created = Cart.objects.get_or_create(user=user)
+        return cart
+
+    def serialize_cart(self, cart, request):
+        serializer = CartSerializer(cart, context={"request": request})
+        return serializer.data
+
+
+class CartGetView(CartBaseView):
+    """POST /cart/get"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+        cart = self.get_cart(user)
+        return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+
+
+class CartAddView(CartBaseView):
+    """POST /cart/add"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+
+        sku_id = request.data.get("sku_id")
+        quantity = request.data.get("quantity", 1)
+
+        try:
+            quantity = int(quantity)
+        except (TypeError, ValueError):
+            quantity = 1
+        quantity = max(quantity, 1)
+
+        if not sku_id:
+            return Response(
+                {"detail": "sku_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sku = SKU.objects.filter(id=sku_id, is_active=True).select_related("product").first()
+        if not sku:
+            return Response(
+                {"detail": "SKU not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        cart = self.get_cart(user)
+        with transaction.atomic():
+            cart_item, created = CartItem.objects.select_for_update().get_or_create(
+                cart=cart,
+                sku=sku,
+                defaults={"quantity": 0},
+            )
+            cart_item.quantity = cart_item.quantity + quantity
+            cart_item.save()
+
+        return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+
+
+class CartUpdateView(CartBaseView):
+    """POST /cart/update"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+
+        cart_item_id = request.data.get("cart_item_id")
+        quantity = request.data.get("quantity")
+
+        if cart_item_id is None or quantity is None:
+            return Response(
+                {"detail": "cart_item_id and quantity are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            cart_item_id = int(cart_item_id)
+            quantity = int(quantity)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "cart_item_id and quantity must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cart = self.get_cart(user)
+        try:
+            cart_item = cart.items.select_for_update().get(id=cart_item_id)
+        except CartItem.DoesNotExist:
+            return Response(
+                {"detail": "Cart item not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with transaction.atomic():
+            if quantity <= 0:
+                cart_item.delete()
+            else:
+                cart_item.quantity = quantity
+                cart_item.save()
+
+        return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+
+
+class CartRemoveView(CartBaseView):
+    """POST /cart/remove"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+
+        cart_item_id = request.data.get("cart_item_id")
+        if cart_item_id is None:
+            return Response(
+                {"detail": "cart_item_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            cart_item_id = int(cart_item_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "cart_item_id must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cart = self.get_cart(user)
+        cart.items.filter(id=cart_item_id).delete()
+        return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+
+
+class CartClearView(CartBaseView):
+    """POST /cart/clear"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+        cart = self.get_cart(user)
+        cart.items.all().delete()
+        return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+
+
+class WishlistBaseView(BaseUserLookupMixin, APIView):
+    """Base functionality for wishlist operations."""
+
+    def get_wishlist(self, user):
+        wishlist, _created = Wishlist.objects.get_or_create(user=user)
+        return wishlist
+
+    def serialize_wishlist(self, wishlist, request):
+        serializer = WishlistSerializer(wishlist, context={"request": request})
+        return serializer.data
+
+
+class WishlistGetView(WishlistBaseView):
+    """POST /wishlist/get"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+        wishlist = self.get_wishlist(user)
+        return Response(self.serialize_wishlist(wishlist, request), status=status.HTTP_200_OK)
+
+
+class WishlistAddView(WishlistBaseView):
+    """POST /wishlist/add"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+
+        product_id = request.data.get("product_id")
+        if not product_id:
+            return Response(
+                {"detail": "product_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            product = Product.objects.get(id=product_id, is_active=True)
+        except Product.DoesNotExist:
+            return Response(
+                {"detail": "Product not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        wishlist = self.get_wishlist(user)
+        WishlistItem.objects.get_or_create(wishlist=wishlist, product=product)
+
+        return Response(self.serialize_wishlist(wishlist, request), status=status.HTTP_200_OK)
+
+
+class WishlistRemoveView(WishlistBaseView):
+    """POST /wishlist/remove"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+
+        product_id = request.data.get("product_id")
+        if not product_id:
+            return Response(
+                {"detail": "product_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        wishlist = self.get_wishlist(user)
+        wishlist.items.filter(product_id=product_id).delete()
+
+        return Response(self.serialize_wishlist(wishlist, request), status=status.HTTP_200_OK)
+
+
+class WishlistClearView(WishlistBaseView):
+    """POST /wishlist/clear"""
+
+    def post(self, request):
+        user, error = self.parse_user_id(request)
+        if error:
+            return error
+
+        wishlist = self.get_wishlist(user)
+        wishlist.items.all().delete()
+
+        return Response(
+            {
+                "success": True,
+                "message": "Wishlist cleared.",
+                **self.serialize_wishlist(wishlist, request),
+            },
+            status=status.HTTP_200_OK,
         )
 
 

@@ -13,12 +13,16 @@ from rest_framework import serializers
 
 from orders.models import Review
 from .models import (
+    Cart,
+    CartItem,
     Category,
     Product,
     ProductFeature,
     ProductImage,
     SKU,
     Subcategory,
+    Wishlist,
+    WishlistItem,
 )
 
 
@@ -213,6 +217,52 @@ class ProductSerializerMixin:
             return None
         request = self.context.get("request") if hasattr(self, "context") else None
         return request.build_absolute_uri(path) if request else path
+
+    def _primary_image(self, obj: Product) -> Optional[str]:
+        if obj.image:
+            return self._build_absolute_uri(obj.image.url)
+        first_image = obj.images.first()
+        if first_image and first_image.image:
+            return self._build_absolute_uri(first_image.image.url)
+        return None
+
+    def _product_summary(self, obj: Product) -> Dict[str, Optional[str]]:
+        payload = {
+            "id": obj.id,
+            "title": obj.name,
+            "name": obj.name,
+            "brand": self._brand_payload(obj),
+            "price_min": None,
+            "price_max": None,
+            "original_price_min": None,
+            "original_price_max": None,
+            "discount_percent": obj.discount,
+            "image": self._primary_image(obj),
+            "images": [],
+            "category": CategorySummarySerializer(obj.category).data if obj.category else None,
+            "subcategory": SubcategorySummarySerializer(obj.subcategory).data if obj.subcategory else None,
+            "available_sizes": self._available_sizes(obj),
+            "available_colors": self._available_colors(obj),
+            "rating_avg": float(obj.rating or 0.0),
+            "rating_count": obj.reviews_count,
+            "sold_count": obj.sales_count,
+            "in_stock": obj.in_stock,
+            "description": obj.description,
+        }
+
+        if obj.images.exists():
+            payload["images"] = [
+                self._build_absolute_uri(image.image.url)
+                for image in obj.images.all()
+                if image.image
+            ]
+
+        price_payload = self._price_range(obj)
+        payload["price_min"] = price_payload["price_min"]
+        payload["price_max"] = price_payload["price_max"]
+        payload["original_price_min"] = price_payload["original_price_min"]
+        payload["original_price_max"] = price_payload["original_price_max"]
+        return payload
 
 
 class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer):
@@ -433,6 +483,142 @@ class ProductDetailSerializer(ProductListSerializer):
             queryset,
             many=True,
             context={"request": request} if request else None,
+        )
+        return serializer.data
+
+
+class CartItemSerializer(ProductSerializerMixin, serializers.ModelSerializer):
+    """Serializer for individual cart items."""
+
+    product_id = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    original_price = serializers.SerializerMethodField()
+    brand = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    sku_id = serializers.IntegerField(source="sku.id", read_only=True)
+    size = serializers.CharField(source="sku.size", read_only=True)
+    color = serializers.CharField(source="sku.color", read_only=True)
+
+    class Meta:
+        model = CartItem
+        fields = (
+            "id",
+            "product_id",
+            "sku_id",
+            "name",
+            "price",
+            "original_price",
+            "brand",
+            "image",
+            "quantity",
+            "size",
+            "color",
+        )
+
+    def get_product_id(self, obj: CartItem) -> Optional[int]:
+        return obj.sku.product_id if obj.sku else None
+
+    def get_name(self, obj: CartItem) -> str:
+        return obj.sku.product.name if obj.sku and obj.sku.product else ""
+
+    def get_price(self, obj: CartItem) -> Optional[float]:
+        if obj.sku and obj.sku.price is not None:
+            return float(obj.sku.price)
+        if obj.sku and obj.sku.product and obj.sku.product.price is not None:
+            return float(obj.sku.product.price)
+        return None
+
+    def get_original_price(self, obj: CartItem) -> Optional[float]:
+        if obj.sku and obj.sku.original_price is not None:
+            return float(obj.sku.original_price)
+        if obj.sku and obj.sku.product and obj.sku.product.original_price is not None:
+            return float(obj.sku.product.original_price)
+        return None
+
+    def get_brand(self, obj: CartItem) -> Optional[str]:
+        if obj.sku and obj.sku.product:
+            return obj.sku.product.brand
+        return None
+
+    def get_image(self, obj: CartItem) -> Optional[str]:
+        if obj.sku and obj.sku.variant_image:
+            return self._build_absolute_uri(obj.sku.variant_image.url)
+        if obj.sku and obj.sku.product:
+            return self._primary_image(obj.sku.product)
+        return None
+
+
+class CartSerializer(serializers.ModelSerializer):
+    """Serializer for cart structure expected by frontend."""
+
+    items = serializers.SerializerMethodField()
+    total_items = serializers.SerializerMethodField()
+    total_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = (
+            "id",
+            "user_id",
+            "items",
+            "total_items",
+            "total_price",
+        )
+
+    def get_items(self, obj: Cart) -> List[Dict]:
+        serializer = CartItemSerializer(
+            obj.items.select_related("sku", "sku__product").prefetch_related(
+                "sku__product__images"
+            ),
+            many=True,
+            context=self.context,
+        )
+        return serializer.data
+
+    def get_total_items(self, obj: Cart) -> int:
+        return obj.total_items
+
+    def get_total_price(self, obj: Cart) -> float:
+        return float(obj.total_price or 0)
+
+
+class WishlistItemSerializer(ProductSerializerMixin, serializers.ModelSerializer):
+    """Serializer for wishlist items including product payload."""
+
+    product = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WishlistItem
+        fields = (
+            "id",
+            "product",
+            "created_at",
+        )
+
+    def get_product(self, obj: WishlistItem) -> Dict:
+        return self._product_summary(obj.product)
+
+
+class WishlistSerializer(serializers.ModelSerializer):
+    """Serializer for wishlist response."""
+
+    items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Wishlist
+        fields = (
+            "id",
+            "user_id",
+            "items",
+        )
+
+    def get_items(self, obj: Wishlist) -> List[Dict]:
+        serializer = WishlistItemSerializer(
+            obj.items.select_related("product")
+            .prefetch_related("product__images", "product__skus"),
+            many=True,
+            context=self.context,
         )
         return serializer.data
 
