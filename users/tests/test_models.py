@@ -81,8 +81,22 @@ class UserModelTest(TestCase):
     
     def test_location_choices(self):
         """Test location field choices"""
-        self.assertIn(self.user_kg.location, ['KG', 'US', 'ALL'])
-        self.assertIn(self.user_us.location, ['KG', 'US', 'ALL'])
+        self.assertIn(self.user_kg.location, ['KG', 'US'])
+        self.assertIn(self.user_us.location, ['KG', 'US'])
+
+    def test_location_alignment_updates_fields(self):
+        """Country and currency fields should follow location selection"""
+        user = User.objects.create(phone='+15550000000', location='US')
+        self.assertEqual(user.country, 'United States')
+        self.assertEqual(user.currency, '$')
+        self.assertEqual(user.currency_code, 'USD')
+
+        user.location = 'KG'
+        user.save()
+        user.refresh_from_db()
+        self.assertEqual(user.country, 'Kyrgyzstan')
+        self.assertEqual(user.currency, 'сом')
+        self.assertEqual(user.currency_code, 'KGS')
     
     def test_language_choices(self):
         """Test language field choices"""

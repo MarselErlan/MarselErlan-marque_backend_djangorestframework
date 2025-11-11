@@ -38,6 +38,19 @@ class User(AbstractBaseUser, PermissionsMixin):
         ('KG', 'Kyrgyzstan'),
         ('US', 'United States'),
     ]
+
+    LOCATION_DEFAULTS = {
+        'KG': {
+            'country': 'Kyrgyzstan',
+            'currency': 'сом',
+            'currency_code': 'KGS',
+        },
+        'US': {
+            'country': 'United States',
+            'currency': '$',
+            'currency_code': 'USD',
+        },
+    }
     
     LANGUAGE_CHOICES = [
         ('ru', 'Russian'),
@@ -134,6 +147,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         elif self.location == 'US':
             return 'USD'
         return 'KGS'
+
+    def save(self, *args, **kwargs):
+        """Ensure country and currency fields stay aligned with location."""
+        defaults = self.LOCATION_DEFAULTS.get(self.location)
+        if defaults:
+            self.country = defaults['country']
+            self.currency = defaults['currency']
+            self.currency_code = defaults['currency_code']
+        super().save(*args, **kwargs)
 
 
 class VerificationCode(models.Model):
