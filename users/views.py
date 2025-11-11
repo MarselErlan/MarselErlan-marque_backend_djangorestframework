@@ -510,11 +510,10 @@ class AddressViewSet(viewsets.ModelViewSet):
         """Update address"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = AddressCreateSerializer(
+        serializer = self.get_serializer(
             instance,
             data=request.data,
             partial=partial,
-            context=self.get_serializer_context()
         )
         
         if serializer.is_valid():
@@ -530,7 +529,7 @@ class AddressViewSet(viewsets.ModelViewSet):
             return Response({
                 'success': True,
                 'message': 'Address updated successfully',
-                'address': AddressSerializer(address).data
+                'address': AddressSerializer(address, context=self.get_serializer_context()).data
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
