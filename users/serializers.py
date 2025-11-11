@@ -328,3 +328,90 @@ class VerifyCodeSerializer(serializers.Serializer):
             raise serializers.ValidationError("Verification code must contain only digits")
         return value
 
+
+class SuccessMessageSerializer(serializers.Serializer):
+    """Generic success response with message."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+
+
+class AddressListResponseSerializer(serializers.Serializer):
+    """Response serializer for address list endpoint."""
+
+    success = serializers.BooleanField()
+    addresses = AddressSerializer(many=True)
+    total = serializers.IntegerField()
+
+
+class AddressDetailResponseSerializer(serializers.Serializer):
+    """Response serializer for address create/update endpoints."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    address = AddressSerializer()
+
+
+class PaymentMethodListResponseSerializer(serializers.Serializer):
+    """Response serializer for payment method list."""
+
+    success = serializers.BooleanField()
+    payment_methods = PaymentMethodSerializer(many=True)
+    total = serializers.IntegerField()
+
+
+class PaymentMethodDetailResponseSerializer(serializers.Serializer):
+    """Response serializer for payment method create."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    payment_method = PaymentMethodSerializer()
+
+
+class PaymentMethodUpdateSerializer(serializers.Serializer):
+    """Serializer for updating payment method fields."""
+
+    is_default = serializers.BooleanField()
+
+
+class OrderListResponseSerializer(serializers.Serializer):
+    """Response serializer for orders list."""
+
+    success = serializers.BooleanField()
+    orders = OrderListSerializer(many=True)
+    total = serializers.IntegerField()
+    has_more = serializers.BooleanField()
+
+
+class OrderDetailResponseSerializer(serializers.Serializer):
+    """Response serializer for order detail."""
+
+    success = serializers.BooleanField()
+    order = OrderDetailSerializer()
+
+
+class OrderCancelResponseSerializer(serializers.Serializer):
+    """Response serializer for cancelling an order."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    order_id = serializers.IntegerField()
+    status = serializers.CharField()
+
+
+class NotificationListResponseSerializer(serializers.Serializer):
+    """Response serializer for notifications list."""
+
+    success = serializers.BooleanField()
+    notifications = NotificationSerializer(many=True)
+    total = serializers.IntegerField()
+    unread_count = serializers.IntegerField()
+
+
+class NotificationBulkUpdateResponseSerializer(serializers.Serializer):
+    """Response serializer for notification read/read-all actions."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    count = serializers.IntegerField(required=False)
+

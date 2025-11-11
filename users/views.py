@@ -9,7 +9,13 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    extend_schema,
+    inline_serializer,
+    OpenApiParameter,
+    OpenApiTypes,
+    OpenApiResponse,
+)
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q
@@ -33,11 +39,45 @@ from .serializers import (
     AddressSerializer, AddressCreateSerializer,
     PaymentMethodSerializer, PaymentMethodCreateSerializer,
     NotificationSerializer, OrderListSerializer, OrderDetailSerializer,
-    SendVerificationSerializer, VerifyCodeSerializer
+    SendVerificationSerializer, VerifyCodeSerializer,
+    SuccessMessageSerializer, AddressListResponseSerializer,
+    AddressDetailResponseSerializer, PaymentMethodListResponseSerializer,
+    PaymentMethodDetailResponseSerializer, PaymentMethodUpdateSerializer,
+    OrderListResponseSerializer,
+    OrderDetailResponseSerializer, OrderCancelResponseSerializer,
+    NotificationListResponseSerializer, NotificationBulkUpdateResponseSerializer,
 )
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+LIMIT_PARAM = OpenApiParameter(
+    name="limit",
+    type=OpenApiTypes.INT,
+    location=OpenApiParameter.QUERY,
+    description="Maximum number of records to return (defaults to 20).",
+)
+
+OFFSET_PARAM = OpenApiParameter(
+    name="offset",
+    type=OpenApiTypes.INT,
+    location=OpenApiParameter.QUERY,
+    description="Number of records to skip before collecting results.",
+)
+
+STATUS_FILTER_PARAM = OpenApiParameter(
+    name="status",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Filter orders by status.",
+)
+
+UNREAD_ONLY_PARAM = OpenApiParameter(
+    name="unread_only",
+    type=OpenApiTypes.BOOL,
+    location=OpenApiParameter.QUERY,
+    description="Return only unread notifications when set to true.",
+)
 
 # ===========================
 # TWILIO CONFIGURATION
@@ -409,6 +449,11 @@ class AddressViewSet(viewsets.ModelViewSet):
             return AddressCreateSerializer
         return AddressSerializer
     
+    @extend_schema(
+        summary="List saved addresses",
+        tags=["addresses"],
+        responses={200: AddressListResponseSerializer},
+    )
     def list(self, request, *args, **kwargs):
         """List all addresses for user"""
         queryset = self.get_queryset()
@@ -419,6 +464,15 @@ class AddressViewSet(viewsets.ModelViewSet):
             'total': queryset.count()
         }, status=status.HTTP_200_OK)
     
+    @extend_schema(
+        summary="Create a new address",
+        tags=["addresses"],
+        request=AddressCreateSerializer,
+        responses={
+            201: AddressDetailResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
     def create(self, request, *args, **kwargs):
         """Create new address"""
         serializer = self.get_serializer(data=request.data)
@@ -443,6 +497,15 @@ class AddressViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @extend_schema(
+        summary="Update an address",
+        tags=["addresses"],
+        request=AddressCreateSerializer,
+        responses={
+            200: AddressDetailResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
     def update(self, request, *args, **kwargs):
         """Update address"""
         partial = kwargs.pop('partial', False)
@@ -473,6 +536,11 @@ class AddressViewSet(viewsets.ModelViewSet):
 
 
     
+    @extend_schema(
+        summary="Delete an address",
+        tags=["addresses"],
+        responses={200: SuccessMessageSerializer},
+    )
     def destroy(self, request, *args, **kwargs):
         """Delete address"""
         instance = self.get_object()
@@ -508,6 +576,11 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             return PaymentMethodCreateSerializer
         return PaymentMethodSerializer
     
+    @extend_schema(
+        summary="List payment methods",
+        tags=["payment-methods"],
+        responses={200: PaymentMethodListResponseSerializer},
+    )
     def list(self, request, *args, **kwargs):
         """List all payment methods for user"""
         queryset = self.get_queryset()
@@ -518,6 +591,15 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             'total': queryset.count()
         }, status=status.HTTP_200_OK)
     
+    @extend_schema(
+        summary="Add a payment method",
+        tags=["payment-methods"],
+        request=PaymentMethodCreateSerializer,
+        responses={
+            201: PaymentMethodDetailResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
     def create(self, request, *args, **kwargs):
         """Create new payment method"""
         serializer = self.get_serializer(data=request.data)
@@ -547,6 +629,15 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @extend_schema(
+        summary="Update payment method default flag",
+        tags=["payment-methods"],
+        request=PaymentMethodUpdateSerializer,
+        responses={
+            200: SuccessMessageSerializer,
+            400: OpenApiResponse(description="Only is_default field can be updated."),
+        },
+    )
     def update(self, request, *args, **kwargs):
         """Update payment method (only is_default can be updated)"""
         instance = self.get_object()
@@ -574,6 +665,11 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             'message': 'Only is_default field can be updated'
         }, status=status.HTTP_400_BAD_REQUEST)
     
+    @extend_schema(
+        summary="Delete a payment method",
+        tags=["payment-methods"],
+        responses={200: SuccessMessageSerializer},
+    )
     def destroy(self, request, *args, **kwargs):
         """Delete payment method"""
         instance = self.get_object()
@@ -619,6 +715,12 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             return OrderDetailSerializer
         return OrderListSerializer
 
+    @extend_schema(
+        summary="List orders",
+        tags=["orders"],
+        parameters=[LIMIT_PARAM, OFFSET_PARAM, STATUS_FILTER_PARAM],
+        responses={200: OrderListResponseSerializer},
+    )
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         limit = int(request.query_params.get('limit', 20))
@@ -636,6 +738,11 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             'has_more': has_more
         }, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Retrieve order detail",
+        tags=["orders"],
+        responses={200: OrderDetailResponseSerializer},
+    )
     def retrieve(self, request, *args, **kwargs):
         order = self.get_object()
         serializer = self.get_serializer(order)
@@ -644,6 +751,14 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             'order': serializer.data
         }, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Cancel an order",
+        tags=["orders"],
+        responses={
+            200: OrderCancelResponseSerializer,
+            400: OpenApiResponse(description="Order cannot be cancelled."),
+        },
+    )
     @action(detail=True, methods=['post'], url_path='cancel')
     def cancel_order(self, request, pk=None):
         """Allow user to cancel an order if still pending/confirmed"""
@@ -691,6 +806,12 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         
         return queryset.order_by('-created_at')
     
+    @extend_schema(
+        summary="List notifications",
+        tags=["notifications"],
+        parameters=[LIMIT_PARAM, OFFSET_PARAM, UNREAD_ONLY_PARAM],
+        responses={200: NotificationListResponseSerializer},
+    )
     def list(self, request, *args, **kwargs):
         """List notifications with pagination"""
         queryset = self.get_queryset()
@@ -712,6 +833,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             'unread_count': unread_count
         }, status=status.HTTP_200_OK)
     
+    @extend_schema(
+        summary="Mark notification as read",
+        tags=["notifications"],
+        responses={200: NotificationBulkUpdateResponseSerializer},
+    )
     @action(detail=True, methods=['put'], url_path='read')
     def mark_read(self, request, pk=None):
         """Mark notification as read"""
@@ -724,6 +850,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             'message': 'Notification marked as read'
         }, status=status.HTTP_200_OK)
     
+    @extend_schema(
+        summary="Mark all notifications as read",
+        tags=["notifications"],
+        responses={200: NotificationBulkUpdateResponseSerializer},
+    )
     @action(detail=False, methods=['put'], url_path='read-all')
     def mark_all_read(self, request):
         """Mark all notifications as read"""

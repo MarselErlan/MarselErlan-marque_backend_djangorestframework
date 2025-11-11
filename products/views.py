@@ -25,6 +25,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiTypes,
+    OpenApiResponse,
     extend_schema,
     inline_serializer,
 )
@@ -59,9 +60,120 @@ from .serializers import (
     WishlistRemoveRequestSerializer,
     WishlistClearRequestSerializer,
     WishlistClearResponseSerializer,
+    CategoryListResponseSerializer,
+    CategoryDetailResponseSerializer,
+    SubcategoryProductsResponseSerializer,
+    ProductSearchResponseSerializer,
 )
 from .utils import filter_by_market, get_market_currency, get_user_market_from_phone
 
+
+MARKET_QUERY_PARAM = OpenApiParameter(
+    name="market",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Optional market code override (e.g., KG, US).",
+)
+
+PAGE_QUERY_PARAM = OpenApiParameter(
+    name="page",
+    type=OpenApiTypes.INT,
+    location=OpenApiParameter.QUERY,
+    description="Page number (1-indexed).",
+)
+
+LIMIT_QUERY_PARAM = OpenApiParameter(
+    name="limit",
+    type=OpenApiTypes.INT,
+    location=OpenApiParameter.QUERY,
+    description="Maximum number of items to return.",
+)
+
+CATEGORY_FILTER_PARAM = OpenApiParameter(
+    name="category",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Filter by category slug.",
+)
+
+SUBCATEGORY_FILTER_PARAM = OpenApiParameter(
+    name="subcategory",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Filter by subcategory slug.",
+)
+
+BRAND_FILTER_PARAM = OpenApiParameter(
+    name="brand",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Filter by brand name.",
+)
+
+GENDER_FILTER_PARAM = OpenApiParameter(
+    name="gender",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Filter by gender code (e.g., MEN, WOMEN).",
+)
+
+QUERY_PARAM = OpenApiParameter(
+    name="query",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Full-text search query.",
+)
+
+SIZES_PARAM = OpenApiParameter(
+    name="sizes",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Comma-separated list of size filters (e.g., S,M,L).",
+)
+
+COLORS_PARAM = OpenApiParameter(
+    name="colors",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Comma-separated list of color filters.",
+)
+
+BRANDS_PARAM = OpenApiParameter(
+    name="brands",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    description="Comma-separated list of brand filters.",
+)
+
+PRICE_MIN_PARAM = OpenApiParameter(
+    name="price_min",
+    type=OpenApiTypes.NUMBER,
+    location=OpenApiParameter.QUERY,
+    description="Minimum variant price filter.",
+)
+
+PRICE_MAX_PARAM = OpenApiParameter(
+    name="price_max",
+    type=OpenApiTypes.NUMBER,
+    location=OpenApiParameter.QUERY,
+    description="Maximum variant price filter.",
+)
+
+PRODUCT_SORT_PARAM = OpenApiParameter(
+    name="sort_by",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    enum=["price_asc", "price_desc", "rating", "rating_desc", "popular", "bestsellers", "newest"],
+    description="Sort order for products.",
+)
+
+SEARCH_SORT_PARAM = OpenApiParameter(
+    name="sort_by",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    enum=["price_asc", "price_desc", "rating_desc", "bestsellers", "newest"],
+    description="Sort order for search results.",
+)
 
 class MarketAwareAPIView(APIView):
     """
@@ -160,6 +272,12 @@ class CategoryListView(MarketAwareAPIView):
         )
         return self.apply_market_filter(queryset, market)
 
+    @extend_schema(
+        summary="Retrieve categories",
+        tags=["categories"],
+        parameters=[MARKET_QUERY_PARAM],
+        responses={200: CategoryListResponseSerializer},
+    )
     def get(self, request):
         queryset = self.get_queryset(request)
         serializer = CategoryListSerializer(
@@ -198,6 +316,15 @@ class CategoryDetailView(MarketAwareAPIView):
             )
         )
 
+    @extend_schema(
+        summary="Retrieve category detail",
+        tags=["categories"],
+        parameters=[MARKET_QUERY_PARAM],
+        responses={
+            200: CategoryDetailResponseSerializer,
+            404: OpenApiResponse(description="Category not found."),
+        },
+    )
     def get(self, request, slug: str):
         category = self.get_category(request, slug)
         if not category:
@@ -227,6 +354,15 @@ class CategorySubcategoryListView(CategoryDetailView):
     GET /api/v1/categories/<slug>/subcategories
     """
 
+    @extend_schema(
+        summary="List subcategories for a category",
+        tags=["categories"],
+        parameters=[MARKET_QUERY_PARAM],
+        responses={
+            200: CategoryDetailResponseSerializer,
+            404: OpenApiResponse(description="Category not found."),
+        },
+    )
     def get(self, request, slug: str):
         category = self.get_category(request, slug)
         if not category:
@@ -381,6 +517,26 @@ class SubcategoryProductsView(MarketAwareAPIView):
             return queryset.order_by("-created_at")
         return queryset.order_by("-created_at")
 
+    @extend_schema(
+        summary="List products within a subcategory",
+        tags=["products"],
+        parameters=[
+            MARKET_QUERY_PARAM,
+            PAGE_QUERY_PARAM,
+            LIMIT_QUERY_PARAM,
+            PRODUCT_SORT_PARAM,
+            SIZES_PARAM,
+            COLORS_PARAM,
+            BRANDS_PARAM,
+            PRICE_MIN_PARAM,
+            PRICE_MAX_PARAM,
+        ],
+        responses={
+            200: SubcategoryProductsResponseSerializer,
+            400: OpenApiResponse(description="Subcategory slug is required."),
+            404: OpenApiResponse(description="Category or subcategory not found."),
+        },
+    )
     def get(
         self,
         request,
@@ -924,6 +1080,19 @@ class ProductListView(MarketAwareAPIView):
         queryset = queryset.order_by("-is_featured", "-sales_count", "-rating", "-created_at")
         return queryset.distinct()
 
+    @extend_schema(
+        summary="List products",
+        tags=["products"],
+        parameters=[
+            MARKET_QUERY_PARAM,
+            CATEGORY_FILTER_PARAM,
+            SUBCATEGORY_FILTER_PARAM,
+            BRAND_FILTER_PARAM,
+            GENDER_FILTER_PARAM,
+            LIMIT_QUERY_PARAM,
+        ],
+        responses={200: ProductListSerializer(many=True)},
+    )
     def get(self, request):
         queryset = self.get_queryset(request)
         limit = self.resolve_limit(request, default=25)
@@ -948,6 +1117,12 @@ class ProductBestSellerView(ProductListView):
         queryset = super().get_queryset(request)
         return queryset.filter(is_best_seller=True).order_by("-sales_count", "-rating")
 
+    @extend_schema(
+        summary="List best-seller products",
+        tags=["products"],
+        parameters=[MARKET_QUERY_PARAM, LIMIT_QUERY_PARAM],
+        responses={200: ProductListSerializer(many=True)},
+    )
     def get(self, request):
         queryset = self.get_queryset(request)
         limit = self.resolve_limit(request, default=12)
@@ -967,6 +1142,25 @@ class ProductSearchView(MarketAwareAPIView):
     GET /api/v1/products/search
     """
 
+    @extend_schema(
+        summary="Search products",
+        tags=["products"],
+        parameters=[
+            MARKET_QUERY_PARAM,
+            QUERY_PARAM,
+            CATEGORY_FILTER_PARAM,
+            SUBCATEGORY_FILTER_PARAM,
+            SIZES_PARAM,
+            COLORS_PARAM,
+            BRANDS_PARAM,
+            PRICE_MIN_PARAM,
+            PRICE_MAX_PARAM,
+            PAGE_QUERY_PARAM,
+            LIMIT_QUERY_PARAM,
+            SEARCH_SORT_PARAM,
+        ],
+        responses={200: ProductSearchResponseSerializer},
+    )
     def get(self, request):
         query = request.query_params.get("query", "").strip()
         market = self.resolve_market(request)
@@ -1079,6 +1273,15 @@ class ProductDetailView(MarketAwareAPIView):
             return queryset.filter(id=int(identifier)).first()
         return None
 
+    @extend_schema(
+        summary="Retrieve product detail",
+        tags=["products"],
+        parameters=[MARKET_QUERY_PARAM],
+        responses={
+            200: ProductDetailSerializer,
+            404: OpenApiResponse(description="Product not found."),
+        },
+    )
     def get(self, request, identifier: str):
         product = self.get_object(request, identifier)
         if not product:

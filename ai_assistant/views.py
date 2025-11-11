@@ -3,13 +3,69 @@ REST API views for AI-powered product recommendations
 """
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 from products.models import Product
 from .graph import get_recommendation_graph
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class AIRecommendationRequestSerializer(serializers.Serializer):
+    """Request payload for AI recommendations."""
+
+    query = serializers.CharField()
+    market = serializers.CharField(required=False, allow_blank=True)
+    gender = serializers.CharField(required=False, allow_blank=True)
+
+
+class RecommendationProductSerializer(serializers.Serializer):
+    """Product summary returned by AI recommendations."""
+
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    brand = serializers.CharField(required=False, allow_null=True)
+    price = serializers.CharField()
+    image = serializers.CharField(required=False, allow_null=True)
+    rating = serializers.FloatField(required=False, allow_null=True)
+    category = serializers.CharField()
+    subcategory = serializers.CharField(required=False, allow_null=True)
+    in_stock = serializers.BooleanField()
+    slug = serializers.CharField()
+    discount = serializers.FloatField(required=False, allow_null=True)
+
+
+class ExtractedRequirementsSerializer(serializers.Serializer):
+    """Structured attributes extracted from the natural language prompt."""
+
+    occasion = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    style = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    season = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    colors = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
+
+
+class AIRecommendationResponseSerializer(serializers.Serializer):
+    """Response payload for AI recommendations."""
+
+    success = serializers.BooleanField()
+    recommendations = RecommendationProductSerializer(many=True)
+    explanation = serializers.CharField()
+    confidence = serializers.FloatField()
+    extracted_requirements = ExtractedRequirementsSerializer()
+
+
+class AIHealthCheckResponseSerializer(serializers.Serializer):
+    """Health check response payload."""
+
+    status = serializers.CharField()
+    openai_configured = serializers.BooleanField()
+    products_total = serializers.IntegerField()
+    products_with_ai_tags = serializers.IntegerField()
+    coverage = serializers.CharField()
+    langgraph_loaded = serializers.BooleanField()
+    message = serializers.CharField(required=False, allow_blank=True)
 
 
 class AIRecommendationView(APIView):
@@ -52,6 +108,16 @@ class AIRecommendationView(APIView):
     
     permission_classes = [AllowAny]  # Change to [IsAuthenticated] in production
     
+    @extend_schema(
+        summary="Generate AI-powered product recommendations",
+        tags=["ai"],
+        request=AIRecommendationRequestSerializer,
+        responses={
+            200: AIRecommendationResponseSerializer,
+            400: OpenApiResponse(description="Query is required."),
+            500: OpenApiResponse(description="Failed to generate recommendations."),
+        },
+    )
     def post(self, request):
         try:
             # Get request data
@@ -59,7 +125,7 @@ class AIRecommendationView(APIView):
             
             if not query:
                 return Response({
-                    "success": false,
+                    "success": False,
                     "error": "Query is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
             
@@ -156,6 +222,11 @@ class AIHealthCheckView(APIView):
     
     permission_classes = [AllowAny]
     
+    @extend_schema(
+        summary="Check AI assistant health",
+        tags=["ai"],
+        responses={200: AIHealthCheckResponseSerializer},
+    )
     def get(self, request):
         import os
         from langchain_openai import ChatOpenAI

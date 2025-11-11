@@ -695,3 +695,80 @@ class WishlistClearRequestSerializer(StatelessUserRequestSerializer):
     pass
 
 
+class MarketCurrencySerializer(serializers.Serializer):
+    """Serializer describing currency metadata for a market."""
+
+    symbol = serializers.CharField()
+    code = serializers.CharField()
+    country = serializers.CharField()
+    language = serializers.CharField()
+
+
+class AvailableBrandSerializer(serializers.Serializer):
+    """Serializer for a single available brand entry."""
+
+    name = serializers.CharField()
+    slug = serializers.CharField(allow_null=True)
+
+
+class PriceRangeSerializer(serializers.Serializer):
+    """Serializer representing minimum and maximum price."""
+
+    min = serializers.FloatField()
+    max = serializers.FloatField()
+
+
+class ProductFiltersSerializer(serializers.Serializer):
+    """Serializer for market-aware attribute filters."""
+
+    available_sizes = serializers.ListField(
+        child=serializers.CharField(), allow_empty=True
+    )
+    available_colors = serializers.ListField(
+        child=serializers.CharField(), allow_empty=True
+    )
+    available_brands = AvailableBrandSerializer(many=True)
+    price_range = PriceRangeSerializer()
+
+
+class CategoryListResponseSerializer(serializers.Serializer):
+    """Serializer for category collection responses."""
+
+    categories = CategoryListSerializer(many=True, read_only=True)
+    total = serializers.IntegerField()
+
+
+class CategoryDetailResponseSerializer(serializers.Serializer):
+    """Serializer for a category with nested subcategories."""
+
+    category = CategoryDetailSerializer(read_only=True)
+    subcategories = SubcategoryListSerializer(many=True, read_only=True)
+
+
+class SubcategoryProductsResponseSerializer(serializers.Serializer):
+    """Serializer for subcategory product listings with filters."""
+
+    category = CategoryDetailSerializer(read_only=True)
+    subcategory = SubcategoryListSerializer(read_only=True)
+    products = ProductListSerializer(many=True, read_only=True)
+    filters = ProductFiltersSerializer(read_only=True)
+    total = serializers.IntegerField()
+    page = serializers.IntegerField()
+    limit = serializers.IntegerField()
+    total_pages = serializers.IntegerField()
+    has_more = serializers.BooleanField()
+    currency = MarketCurrencySerializer(read_only=True)
+
+
+class ProductSearchResponseSerializer(serializers.Serializer):
+    """Serializer for search endpoint responses."""
+
+    products = ProductListSerializer(many=True, read_only=True)
+    total = serializers.IntegerField()
+    page = serializers.IntegerField()
+    limit = serializers.IntegerField()
+    total_pages = serializers.IntegerField()
+    has_more = serializers.BooleanField()
+    currency = MarketCurrencySerializer(read_only=True)
+
+
