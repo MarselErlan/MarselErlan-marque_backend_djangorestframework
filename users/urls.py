@@ -12,7 +12,7 @@ from .views import (
 )
 
 # Create router for ViewSets
-router = DefaultRouter()
+router = DefaultRouter(trailing_slash=False)
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
 router.register(r'notifications', NotificationViewSet, basename='notification')

@@ -234,7 +234,7 @@ class AddressAPITest(TestCase):
     
     def test_list_addresses(self):
         """Test listing user addresses"""
-        response = self.client.get('/api/v1/profile/addresses/')
+        response = self.client.get('/api/v1/profile/addresses')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -243,7 +243,7 @@ class AddressAPITest(TestCase):
     
     def test_create_address(self):
         """Test creating new address"""
-        response = self.client.post('/api/v1/profile/addresses/', {
+        response = self.client.post('/api/v1/profile/addresses', {
             'title': 'Work',
             'full_address': 'Bishkek, Manas Ave 456',
             'city': 'Bishkek',
@@ -258,7 +258,7 @@ class AddressAPITest(TestCase):
     
     def test_update_address(self):
         """Test updating address"""
-        response = self.client.put(f'/api/v1/profile/addresses/{self.address.id}/', {
+        response = self.client.put(f'/api/v1/profile/addresses/{self.address.id}', {
             'title': 'Updated Home',
             'full_address': 'Bishkek, Updated Ave 789',
             'city': 'Bishkek'
@@ -270,10 +270,28 @@ class AddressAPITest(TestCase):
         # Verify updates
         self.address.refresh_from_db()
         self.assertEqual(self.address.title, 'Updated Home')
+
+    def test_partial_update_address(self):
+        """Test partial update via PATCH"""
+        response = self.client.patch(
+            f'/api/v1/profile/addresses/{self.address.id}',
+            {
+                'title': 'Patched Home',
+                'is_default': True,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+
+        self.address.refresh_from_db()
+        self.assertEqual(self.address.title, 'Patched Home')
+        self.assertTrue(self.address.is_default)
     
     def test_delete_address(self):
         """Test deleting address"""
-        response = self.client.delete(f'/api/v1/profile/addresses/{self.address.id}/')
+        response = self.client.delete(f'/api/v1/profile/addresses/{self.address.id}')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -291,7 +309,7 @@ class AddressAPITest(TestCase):
             market='KG'
         )
         
-        response = self.client.get(f'/api/v1/profile/addresses/{other_address.id}/')
+        response = self.client.get(f'/api/v1/profile/addresses/{other_address.id}')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -320,7 +338,7 @@ class PaymentMethodAPITest(TestCase):
     
     def test_list_payment_methods(self):
         """Test listing user payment methods"""
-        response = self.client.get('/api/v1/profile/payment-methods/')
+        response = self.client.get('/api/v1/profile/payment-methods')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -328,7 +346,7 @@ class PaymentMethodAPITest(TestCase):
     
     def test_create_payment_method(self):
         """Test creating new payment method"""
-        response = self.client.post('/api/v1/profile/payment-methods/', {
+        response = self.client.post('/api/v1/profile/payment-methods', {
             'card_number': '4111111111111111',
             'card_holder_name': 'TEST USER',
             'expiry_month': '12',
@@ -343,7 +361,7 @@ class PaymentMethodAPITest(TestCase):
     
     def test_update_payment_method_set_default(self):
         """Test updating payment method to set as default"""
-        response = self.client.put(f'/api/v1/profile/payment-methods/{self.payment.id}/', {
+        response = self.client.put(f'/api/v1/profile/payment-methods/{self.payment.id}', {
             'is_default': True
         }, format='json')
         
@@ -356,7 +374,7 @@ class PaymentMethodAPITest(TestCase):
     
     def test_delete_payment_method(self):
         """Test deleting payment method"""
-        response = self.client.delete(f'/api/v1/profile/payment-methods/{self.payment.id}/')
+        response = self.client.delete(f'/api/v1/profile/payment-methods/{self.payment.id}')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -399,7 +417,7 @@ class NotificationAPITest(TestCase):
     
     def test_list_all_notifications(self):
         """Test listing all notifications"""
-        response = self.client.get('/api/v1/profile/notifications/')
+        response = self.client.get('/api/v1/profile/notifications')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -408,7 +426,7 @@ class NotificationAPITest(TestCase):
     
     def test_list_unread_notifications_only(self):
         """Test listing only unread notifications"""
-        response = self.client.get('/api/v1/profile/notifications/?unread_only=true')
+        response = self.client.get('/api/v1/profile/notifications?unread_only=true')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['notifications']), 1)
@@ -416,7 +434,7 @@ class NotificationAPITest(TestCase):
     
     def test_mark_notification_as_read(self):
         """Test marking single notification as read"""
-        response = self.client.put(f'/api/v1/profile/notifications/{self.notification1.id}/read/')
+        response = self.client.put(f'/api/v1/profile/notifications/{self.notification1.id}/read')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -427,7 +445,7 @@ class NotificationAPITest(TestCase):
     
     def test_mark_all_notifications_as_read(self):
         """Test marking all notifications as read"""
-        response = self.client.put('/api/v1/profile/notifications/read-all/')
+        response = self.client.put('/api/v1/profile/notifications/read-all')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
@@ -450,7 +468,7 @@ class NotificationAPITest(TestCase):
             )
         
         # Test with limit
-        response = self.client.get('/api/v1/profile/notifications/?limit=10')
+        response = self.client.get('/api/v1/profile/notifications?limit=10')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['notifications']), 10)
