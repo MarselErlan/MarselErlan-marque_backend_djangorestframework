@@ -6,6 +6,7 @@ Tests for all serializers in the users app
 from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIRequestFactory
+from django.core.files.uploadedfile import SimpleUploadedFile
 from users.serializers import (
     UserSerializer, UserUpdateSerializer,
     AddressSerializer, AddressCreateSerializer,
@@ -26,7 +27,7 @@ class UserSerializerTest(TestCase):
         self.user = User.objects.create(
             phone='+996555123456',
             full_name='Test User',
-            market='KG',
+            location='KG',
             language='ru',
             is_active=True,
             is_verified=True
@@ -42,7 +43,8 @@ class UserSerializerTest(TestCase):
         self.assertIn('formatted_phone', data)
         self.assertIn('name', data)
         self.assertIn('full_name', data)
-        self.assertIn('market', data)
+        self.assertIn('profile_image', data)
+        self.assertIn('location', data)
         self.assertIn('language', data)
         self.assertIn('country', data)
         self.assertIn('currency', data)
@@ -64,7 +66,7 @@ class UserUpdateSerializerTest(TestCase):
         self.user = User.objects.create(
             phone='+996555123456',
             full_name='Test User',
-            market='KG'
+            location='KG'
         )
     
     def test_update_full_name(self):
@@ -77,13 +79,19 @@ class UserUpdateSerializerTest(TestCase):
         self.assertEqual(updated_user.name, 'Updated Name')
     
     def test_update_profile_image(self):
-        """Test updating profile image URL"""
-        data = {'profile_image_url': 'https://example.com/image.jpg'}
+        """Test updating profile image"""
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff'
+            b'\xff\x21\xf9\x04\x00\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00'
+            b'\x00\x02\x02\x4c\x01\x00\x3b'
+        )
+        image = SimpleUploadedFile("avatar.gif", small_gif, content_type="image/gif")
+        data = {'profile_image': image}
         serializer = UserUpdateSerializer(instance=self.user, data=data, partial=True)
         
-        self.assertTrue(serializer.is_valid())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
         updated_user = serializer.save()
-        self.assertEqual(updated_user.profile_image_url, 'https://example.com/image.jpg')
+        self.assertTrue(bool(updated_user.profile_image))
     
     def test_full_name_validation_too_short(self):
         """Test full name must be at least 2 characters"""
@@ -101,7 +109,7 @@ class AddressSerializerTest(TestCase):
         """Set up test data"""
         self.user = User.objects.create(
             phone='+996555123456',
-            market='KG'
+            location='KG'
         )
         
         self.factory = RequestFactory()
@@ -150,7 +158,7 @@ class PaymentMethodSerializerTest(TestCase):
         """Set up test data"""
         self.user = User.objects.create(
             phone='+996555123456',
-            market='KG'
+            location='KG'
         )
         
         self.factory = RequestFactory()
@@ -239,7 +247,7 @@ class NotificationSerializerTest(TestCase):
         """Set up test data"""
         self.user = User.objects.create(
             phone='+996555123456',
-            market='KG'
+            location='KG'
         )
         
         self.notification = Notification.objects.create(

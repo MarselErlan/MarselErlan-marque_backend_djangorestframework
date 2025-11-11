@@ -150,7 +150,7 @@ class ProductAPIViewTests(TestCase):
             phone="+996777123456",
             full_name="Integration User",
             password="password123",
-            market="KG",
+            location="KG",
         )
 
         cls.sku1 = SKU.objects.filter(product=cls.product, sku_code="MARQUE-S-BLACK").first()

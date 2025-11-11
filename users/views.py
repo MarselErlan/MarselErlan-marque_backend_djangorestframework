@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
@@ -198,7 +199,7 @@ class SendVerificationView(APIView):
                     "success": serializers.BooleanField(),
                     "message": serializers.CharField(),
                     "phone": serializers.CharField(),
-                    "market": serializers.CharField(),
+                    "location": serializers.CharField(),
                     "language": serializers.CharField(),
                     "expires_in_minutes": serializers.IntegerField(),
                 },
@@ -213,9 +214,9 @@ class SendVerificationView(APIView):
         phone = serializer.validated_data['phone']
         
         # Determine market based on country code
-        market = 'KG' if phone.startswith('+996') else 'US'
-        language = 'ru' if market == 'KG' else 'en'
-        expiry_minutes = 10 if market == 'KG' else 15
+        location = 'KG' if phone.startswith('+996') else 'US'
+        language = 'ru' if location == 'KG' else 'en'
+        expiry_minutes = 10 if location == 'KG' else 15
         
         if not TWILIO_READY:
             if not settings.TESTING:
@@ -244,7 +245,7 @@ class SendVerificationView(APIView):
             'success': True,
             'message': f'Verification code sent to {phone}',
             'phone': phone,
-            'market': market,
+            'location': location,
             'language': language,
             'expires_in_minutes': expiry_minutes
         }, status=status.HTTP_200_OK)
@@ -279,7 +280,7 @@ class VerifyCodeView(APIView):
                             "is_verified": serializers.BooleanField(),
                         },
                     ),
-                    "market": serializers.CharField(),
+                    "location": serializers.CharField(),
                     "is_new_user": serializers.BooleanField(),
                 },
             )
@@ -294,8 +295,8 @@ class VerifyCodeView(APIView):
         code = serializer.validated_data['verification_code']
         
         # Determine market based on phone
-        market = 'KG' if phone.startswith('+996') else 'US'
-        language = 'ru' if market == 'KG' else 'en'
+        location = 'KG' if phone.startswith('+996') else 'US'
+        language = 'ru' if location == 'KG' else 'en'
         
         if not TWILIO_READY:
             return Response({
@@ -314,7 +315,7 @@ class VerifyCodeView(APIView):
             phone=phone,
             defaults={
                 'full_name': phone.split('+')[-1][:10],  # Use last 10 digits as temp name
-                'market': market,
+                'location': location,
                 'language': language,
                 'is_verified': True,
                 'is_active': True,
@@ -325,12 +326,12 @@ class VerifyCodeView(APIView):
         if not created:
             user.is_verified = True
             user.is_active = True
-            user.market = market  # Update market based on phone
+            user.location = location  # Update location based on phone
             user.last_login = timezone.now()
             user.save()
             logger.info(f"🔄 Existing user logged in: {user.id} - {phone}")
         else:
-            logger.info(f"✅ New user created: {user.id} - {phone} - Market: {market}")
+            logger.info(f"✅ New user created: {user.id} - {phone} - Location: {location}")
         
         # Create or get auth token
         token, _ = Token.objects.get_or_create(user=user)
@@ -347,7 +348,7 @@ class VerifyCodeView(APIView):
                 'is_active': user.is_active,
                 'is_verified': user.is_verified,
             },
-            'market': user.market,
+            'location': user.location,
             'is_new_user': created
         }, status=status.HTTP_200_OK)
 
@@ -394,6 +395,7 @@ class ProfileView(APIView):
     PUT /api/v1/auth/profile - Update user profile
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     
     @extend_schema(
         summary="Retrieve current user profile",
@@ -402,7 +404,7 @@ class ProfileView(APIView):
     )
     def get(self, request):
         """Get user profile"""
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
@@ -419,7 +421,7 @@ class ProfileView(APIView):
             return Response({
                 'success': True,
                 'message': 'Profile updated successfully',
-                'user': UserSerializer(request.user).data
+                'user': UserSerializer(request.user, context={'request': request}).data
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -480,7 +482,7 @@ class AddressViewSet(viewsets.ModelViewSet):
             # Create address with user and market
             address = serializer.save(
                 user=request.user,
-                market=request.user.market
+                market=request.user.location
             )
             
             # If set as default, unset other defaults
@@ -609,7 +611,7 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             # Create payment method with masked card number
             payment_method = PaymentMethod.objects.create(
                 user=request.user,
-                market=request.user.market,
+                market=request.user.location,
                 card_number_masked=f"****{card_number[-4:]}",
                 **serializer.validated_data
             )

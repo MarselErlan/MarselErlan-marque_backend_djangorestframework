@@ -11,8 +11,9 @@ from .views import (
     OrderViewSet,
 )
 
-# Create router for ViewSets
-router = DefaultRouter(trailing_slash=False)
+# Create router for ViewSets (allow optional trailing slash)
+router = DefaultRouter()
+router.trailing_slash = '/?'
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
 router.register(r'notifications', NotificationViewSet, basename='notification')

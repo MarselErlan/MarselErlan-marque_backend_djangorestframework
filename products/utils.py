@@ -18,7 +18,7 @@ def filter_by_market(queryset, user_market):
     
     Example:
         products = Product.objects.filter(is_active=True)
-        products = filter_by_market(products, request.user.market)
+        products = filter_by_market(products, request.user.location)
     """
     return queryset.filter(Q(market=user_market) | Q(market='ALL'))
 

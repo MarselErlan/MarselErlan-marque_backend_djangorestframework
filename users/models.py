@@ -34,7 +34,7 @@ class CustomUserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     """Custom User model with phone authentication"""
     
-    MARKET_CHOICES = [
+    LOCATION_CHOICES = [
         ('KG', 'Kyrgyzstan'),
         ('US', 'United States'),
     ]
@@ -49,7 +49,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=20, unique=True, db_index=True)
     full_name = models.CharField(max_length=255, null=True, blank=True)
     email = models.EmailField(max_length=255, null=True, blank=True)
-    profile_image_url = models.URLField(max_length=500, null=True, blank=True)
+    profile_image = models.ImageField(
+        upload_to='users/profile_images/',
+        null=True,
+        blank=True,
+    )
     
     # Status fields
     is_active = models.BooleanField(default=True)
@@ -58,7 +62,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_superuser = models.BooleanField(default=False)
     
     # Market and localization
-    market = models.CharField(max_length=2, choices=MARKET_CHOICES, default='KG')
+    location = models.CharField(max_length=2, choices=LOCATION_CHOICES, default='KG')
     language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default='ru')
     country = models.CharField(max_length=50, default='Kyrgyzstan')
     currency = models.CharField(max_length=10, default='сом')
@@ -109,25 +113,25 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def get_country(self):
         """Get country based on market"""
-        if self.market == 'KG':
+        if self.location == 'KG':
             return 'Kyrgyzstan'
-        elif self.market == 'US':
+        elif self.location == 'US':
             return 'United States'
         return self.country
     
     def get_currency(self):
         """Get currency symbol based on market"""
-        if self.market == 'KG':
+        if self.location == 'KG':
             return 'сом'
-        elif self.market == 'US':
+        elif self.location == 'US':
             return '$'
         return 'сом'
     
     def get_currency_code(self):
         """Get currency code based on market"""
-        if self.market == 'KG':
+        if self.location == 'KG':
             return 'KGS'
-        elif self.market == 'US':
+        elif self.location == 'US':
             return 'USD'
         return 'KGS'
 
@@ -221,7 +225,7 @@ class Address(models.Model):
         # Auto-populate market and country from user
         if self.user:
             if not self.market:
-                self.market = self.user.market
+                self.market = self.user.location
             if self.market in self.MARKET_COUNTRY_MAP:
                 self.country = self.MARKET_COUNTRY_MAP[self.market]
         
@@ -296,7 +300,7 @@ class PaymentMethod(models.Model):
     def save(self, *args, **kwargs):
         # Auto-populate market from user on creation
         if not self.pk and self.user:
-            self.market = self.user.market
+            self.market = self.user.location
         
         # Auto-detect card type from card number
         if self.card_number_masked:
@@ -364,5 +368,5 @@ class Notification(models.Model):
     def save(self, *args, **kwargs):
         # Auto-populate market from user on creation
         if not self.pk and self.user:
-            self.market = self.user.market
+            self.market = self.user.location
         super().save(*args, **kwargs)

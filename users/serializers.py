@@ -18,24 +18,35 @@ class UserSerializer(serializers.ModelSerializer):
     currency = serializers.CharField(source='get_currency', read_only=True)
     currency_code = serializers.CharField(source='get_currency_code', read_only=True)
     country = serializers.CharField(source='get_country', read_only=True)
+    profile_image = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'phone', 'formatted_phone', 'name', 'full_name',
-            'profile_image_url', 'is_active', 'is_verified',
-            'market', 'language', 'country', 'currency', 'currency_code',
+            'profile_image', 'is_active', 'is_verified',
+            'location', 'language', 'country', 'currency', 'currency_code',
             'last_login', 'created_at'
         ]
         read_only_fields = ['id', 'is_verified', 'created_at', 'last_login']
 
+    def get_profile_image(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request')
+            url = obj.profile_image.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return None
+
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating user profile"""
+    profile_image = serializers.ImageField(required=False, allow_null=True)
     
     class Meta:
         model = User
-        fields = ['full_name', 'profile_image_url']
+        fields = ['full_name', 'profile_image']
         
     def validate_full_name(self, value):
         if value and len(value) < 2:
@@ -59,8 +70,8 @@ class AddressSerializer(serializers.ModelSerializer):
         # Auto-set market from user
         user = self.context['request'].user
         validated_data['user'] = user
-        validated_data['market'] = user.market
-        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(user.market, 'Kyrgyzstan')
+        validated_data['market'] = user.location
+        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(user.location, 'Kyrgyzstan')
         
         # If this is set as default, unset other defaults
         if validated_data.get('is_default', False):
@@ -69,7 +80,7 @@ class AddressSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        market = instance.user.market if instance.user else instance.market
+        market = instance.user.location if instance.user else instance.market
         validated_data['market'] = market
         validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(market, instance.country)
         
@@ -83,7 +94,7 @@ class AddressSerializer(serializers.ModelSerializer):
 class AddressCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating addresses (no user field required)"""
     
-    MARKET_REQUIRED_FIELDS = {
+    LOCATION_REQUIRED_FIELDS = {
         'KG': ['title', 'full_address', 'city'],
         'US': ['title', 'full_address', 'street', 'city', 'state', 'postal_code'],
     }
@@ -99,14 +110,14 @@ class AddressCreateSerializer(serializers.ModelSerializer):
     def _get_market(self):
         request = self.context.get('request')
         if request and hasattr(request, 'user') and request.user.is_authenticated:
-            return request.user.market
+            return request.user.location
         if self.instance:
             return self.instance.market
         return 'KG'
     
     def validate(self, attrs):
         market = self._get_market()
-        required_fields = self.MARKET_REQUIRED_FIELDS.get(market, ['title', 'full_address'])
+        required_fields = self.LOCATION_REQUIRED_FIELDS.get(market, ['title', 'full_address'])
         
         for field in required_fields:
             if field in attrs and attrs[field]:
@@ -124,8 +135,8 @@ class AddressCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Authenticated user is required.")
         
         validated_data['user'] = user
-        validated_data['market'] = user.market
-        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(user.market, 'Kyrgyzstan')
+        validated_data['market'] = user.location
+        validated_data['country'] = Address.MARKET_COUNTRY_MAP.get(user.location, 'Kyrgyzstan')
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
@@ -151,7 +162,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
         # Auto-set market from user
         user = self.context['request'].user
         validated_data['user'] = user
-        validated_data['market'] = user.market
+        validated_data['market'] = user.location
         
         # If this is set as default, unset other defaults
         if validated_data.get('is_default', False):

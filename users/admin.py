@@ -5,20 +5,20 @@ from .models import User, VerificationCode, Address, PaymentMethod, Notification
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('phone', 'full_name', 'email', 'market', 'is_active', 'is_verified', 'created_at')
-    list_filter = ('is_active', 'is_verified', 'is_staff', 'market', 'created_at')
+    list_display = ('phone', 'full_name', 'email', 'location', 'is_active', 'is_verified', 'created_at')
+    list_filter = ('is_active', 'is_verified', 'is_staff', 'location', 'created_at')
     search_fields = ('phone', 'full_name', 'email')
     ordering = ('-created_at',)
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('phone', 'full_name', 'email', 'profile_image_url')
+            'fields': ('phone', 'full_name', 'email', 'profile_image')
         }),
         ('Status', {
             'fields': ('is_active', 'is_verified', 'is_staff', 'is_superuser')
         }),
-        ('Market & Localization', {
-            'fields': ('market', 'language', 'country', 'currency', 'currency_code')
+        ('Location & Localization', {
+            'fields': ('location', 'language', 'country', 'currency', 'currency_code')
         }),
         ('Timestamps', {
             'fields': ('last_login', 'created_at', 'updated_at'),
@@ -31,7 +31,7 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('phone', 'password1', 'password2', 'full_name', 'market'),
+            'fields': ('phone', 'password1', 'password2', 'full_name', 'location'),
         }),
     )
     

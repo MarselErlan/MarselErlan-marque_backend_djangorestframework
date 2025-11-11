@@ -51,7 +51,7 @@ class Order(models.Model):
     order_number = models.CharField(max_length=20, unique=True, default=generate_order_number, editable=False)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='orders')
     
-    # Market (copied from user.market at order creation for performance)
+    # Market (copied from user.location at order creation for performance)
     market = models.CharField(max_length=2, choices=MARKET_CHOICES, default='KG', db_index=True)
     
     # References to user's address/payment (can be null if user deletes them)
@@ -129,7 +129,7 @@ class Order(models.Model):
     def save(self, *args, **kwargs):
         # Auto-populate market from user on creation
         if not self.pk and self.user:
-            self.market = self.user.market
+            self.market = self.user.location
             
             # Auto-populate delivery country based on market
             if not self.delivery_country:

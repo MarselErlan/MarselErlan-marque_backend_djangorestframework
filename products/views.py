@@ -195,7 +195,7 @@ class MarketAwareAPIView(APIView):
             5. Default market ("KG")
         """
         if request.user and request.user.is_authenticated:
-            market = getattr(request.user, "market", None)
+            market = getattr(request.user, "location", None)
             if market:
                 return market
 

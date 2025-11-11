@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from unittest.mock import patch
+from django.core.files.uploadedfile import SimpleUploadedFile
 from users.models import Address, PaymentMethod, Notification
 
 User = get_user_model()
@@ -47,7 +48,7 @@ class AuthenticationAPITest(TestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
-        self.assertEqual(response.data['market'], 'US')
+        self.assertEqual(response.data['location'], 'US')
         self.assertEqual(response.data['language'], 'en')
         self.assertNotIn('dev_code', response.data)
         mock_send_sms.assert_called_once_with('+15551234567')
@@ -128,14 +129,14 @@ class AuthenticationAPITest(TestCase):
         }, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['market'], 'US')
+        self.assertEqual(response.data['location'], 'US')
         user = User.objects.get(phone='+15551234567')
-        self.assertEqual(user.market, 'US')
+        self.assertEqual(user.location, 'US')
         self.assertEqual(user.language, 'en')
     
     def test_logout_success(self):
         """Test successful logout"""
-        user = User.objects.create(phone='+996555123456', market='KG')
+        user = User.objects.create(phone='+996555123456', location='KG')
         token = Token.objects.create(user=user)
         
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
@@ -162,7 +163,7 @@ class ProfileAPITest(TestCase):
         self.user = User.objects.create(
             phone='+996555123456',
             full_name='Test User',
-            market='KG',
+            location='KG',
             is_verified=True
         )
         self.token = Token.objects.create(user=self.user)
@@ -175,7 +176,7 @@ class ProfileAPITest(TestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['phone'], '+996555123456')
-        self.assertEqual(response.data['market'], 'KG')
+        self.assertEqual(response.data['location'], 'KG')
         self.assertIn('formatted_phone', response.data)
     
     def test_get_profile_unauthorized(self):
@@ -189,7 +190,6 @@ class ProfileAPITest(TestCase):
         """Test updating profile"""
         response = self.client.put('/api/v1/auth/profile', {
             'full_name': 'Updated Name',
-            'profile_image_url': 'https://example.com/image.jpg'
         }, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -198,7 +198,26 @@ class ProfileAPITest(TestCase):
         # Verify updates
         self.user.refresh_from_db()
         self.assertEqual(self.user.name, 'Updated Name')
-        self.assertEqual(self.user.profile_image_url, 'https://example.com/image.jpg')
+    
+    def test_update_profile_image(self):
+        """Test uploading profile image"""
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff'
+            b'\xff\x21\xf9\x04\x00\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00'
+            b'\x00\x02\x02\x4c\x01\x00\x3b'
+        )
+        image = SimpleUploadedFile("avatar.gif", small_gif, content_type="image/gif")
+        response = self.client.put(
+            '/api/v1/auth/profile',
+            {'profile_image': image},
+            format='multipart'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+
+        self.user.refresh_from_db()
+        self.assertTrue(bool(self.user.profile_image))
     
     def test_update_profile_invalid_data(self):
         """Test updating profile with invalid data"""
@@ -217,7 +236,7 @@ class AddressAPITest(TestCase):
         """Set up test user and client"""
         self.user = User.objects.create(
             phone='+996555123456',
-            market='KG'
+            location='KG'
         )
         self.token = Token.objects.create(user=self.user)
         self.client = APIClient()
@@ -301,7 +320,7 @@ class AddressAPITest(TestCase):
     
     def test_cannot_access_other_user_address(self):
         """Test user cannot access another user's addresses"""
-        other_user = User.objects.create(phone='+996777888999', market='KG')
+        other_user = User.objects.create(phone='+996777888999', location='KG')
         other_address = Address.objects.create(
             user=other_user,
             title='Other Home',
@@ -321,7 +340,7 @@ class PaymentMethodAPITest(TestCase):
         """Set up test user and client"""
         self.user = User.objects.create(
             phone='+996555123456',
-            market='KG'
+            location='KG'
         )
         self.token = Token.objects.create(user=self.user)
         self.client = APIClient()
@@ -391,7 +410,7 @@ class NotificationAPITest(TestCase):
         """Set up test user and client"""
         self.user = User.objects.create(
             phone='+996555123456',
-            market='KG'
+            location='KG'
         )
         self.token = Token.objects.create(user=self.user)
         self.client = APIClient()

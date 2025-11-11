@@ -113,7 +113,7 @@ class ProductSerializerTests(TestCase):
             phone="+996555123456",
             full_name="Test User",
             password="password123",
-            market="KG",
+            location="KG",
         )
         Review.objects.create(
             user=cls.user,

@@ -77,7 +77,7 @@ class AIRecommendationView(APIView):
     Request:
     {
         "query": "I have a party tonight and don't know what to wear",
-        "market": "KG",  # optional, defaults to user.market or 'KG'
+        "market": "KG",  # optional, defaults to user.location or 'KG'
         "gender": "M"    # optional, defaults to user.gender or 'U'
     }
     
@@ -134,7 +134,7 @@ class AIRecommendationView(APIView):
             
             # Determine market and gender
             if user.is_authenticated:
-                user_market = request.data.get('market', user.market)
+                user_market = request.data.get('market', user.location)
                 user_gender = request.data.get('gender', getattr(user, 'gender', 'U'))
             else:
                 user_market = request.data.get('market', 'KG')

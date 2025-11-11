@@ -113,7 +113,7 @@ class RevenueSnapshot(models.Model):
     """Daily and hourly revenue snapshots for analytics
     
     Note: All data is stored in ONE database. The 'market' field is used to 
-    filter/separate analytics by market (KG vs US orders from user.market).
+    filter/separate analytics by market (KG vs US orders from user.location).
     """
     
     SNAPSHOT_TYPE_CHOICES = [
@@ -128,7 +128,7 @@ class RevenueSnapshot(models.Model):
         ('US', 'United States'),
     ]
     
-    # Market filter (separates analytics by user.market, not different databases)
+    # Market filter (separates analytics by user.location, not different databases)
     market = models.CharField(max_length=2, choices=MARKET_CHOICES, default='KG', db_index=True)
     
     # Time period
@@ -234,7 +234,7 @@ class ManagerActivityLog(models.Model):
 class DailyReport(models.Model):
     """Generated daily reports for managers
     
-    Note: Reports are generated per market (based on filtering orders by user.market).
+    Note: Reports are generated per market (based on filtering orders by user.location).
     """
     
     REPORT_STATUS_CHOICES = [
@@ -288,7 +288,7 @@ class DailyReport(models.Model):
 class ManagerNotification(models.Model):
     """In-app notifications for managers
     
-    Note: 'market' indicates which market the notification is related to (from user.market).
+    Note: 'market' indicates which market the notification is related to (from user.location).
     """
     
     NOTIFICATION_TYPE_CHOICES = [

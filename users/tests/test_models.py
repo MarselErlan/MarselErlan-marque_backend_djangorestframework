@@ -20,7 +20,7 @@ class UserModelTest(TestCase):
         self.user_kg = User.objects.create(
             phone='+996555123456',
             full_name='Test User KG',
-            market='KG',
+            location='KG',
             language='ru',
             is_active=True,
             is_verified=True
@@ -29,7 +29,7 @@ class UserModelTest(TestCase):
         self.user_us = User.objects.create(
             phone='+15551234567',
             full_name='Test User US',
-            market='US',
+            location='US',
             language='en',
             is_active=True,
             is_verified=True
@@ -61,7 +61,7 @@ class UserModelTest(TestCase):
         self.assertEqual(self.user_kg.get_full_name(), 'Test User KG')
         
         # Test with no name
-        user_no_name = User.objects.create(phone='+996777888999', market='KG')
+        user_no_name = User.objects.create(phone='+996777888999', location='KG')
         self.assertEqual(user_no_name.get_full_name(), '')
     
     def test_get_currency_kg(self):
@@ -79,10 +79,10 @@ class UserModelTest(TestCase):
         self.assertEqual(self.user_kg.get_country(), 'Kyrgyzstan')
         self.assertEqual(self.user_us.get_country(), 'United States')
     
-    def test_market_choices(self):
-        """Test market field choices"""
-        self.assertIn(self.user_kg.market, ['KG', 'US', 'ALL'])
-        self.assertIn(self.user_us.market, ['KG', 'US', 'ALL'])
+    def test_location_choices(self):
+        """Test location field choices"""
+        self.assertIn(self.user_kg.location, ['KG', 'US', 'ALL'])
+        self.assertIn(self.user_us.location, ['KG', 'US', 'ALL'])
     
     def test_language_choices(self):
         """Test language field choices"""
@@ -92,7 +92,7 @@ class UserModelTest(TestCase):
     def test_phone_unique(self):
         """Test phone number must be unique"""
         with self.assertRaises(Exception):
-            User.objects.create(phone='+996555123456', market='KG')
+            User.objects.create(phone='+996555123456', location='KG')
 
 
 class AddressModelTest(TestCase):
@@ -103,7 +103,7 @@ class AddressModelTest(TestCase):
         self.user = User.objects.create(
             phone='+996555123456',
             full_name='Test User',
-            market='KG'
+            location='KG'
         )
         
         self.address = Address.objects.create(
@@ -173,7 +173,7 @@ class PaymentMethodModelTest(TestCase):
         self.user = User.objects.create(
             phone='+996555123456',
             full_name='Test User',
-            market='KG'
+            location='KG'
         )
         
         self.payment = PaymentMethod.objects.create(
@@ -312,7 +312,7 @@ class NotificationModelTest(TestCase):
         self.user = User.objects.create(
             phone='+996555123456',
             full_name='Test User',
-            market='KG'
+            location='KG'
         )
         
         self.notification = Notification.objects.create(
