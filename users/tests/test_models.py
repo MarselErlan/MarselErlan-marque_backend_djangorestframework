@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
-from users.models import Address, PaymentMethod, VerificationCode, Notification
+from users.models import Address, PaymentMethod, VerificationCode, Notification, UserPhoneNumber
 
 User = get_user_model()
 
@@ -371,4 +371,54 @@ class NotificationModelTest(TestCase):
     def test_notification_market_field(self):
         """Test notification has market field"""
         self.assertEqual(self.notification.market, 'KG')
+
+
+class UserPhoneNumberModelTest(TestCase):
+    """Test UserPhoneNumber model"""
+    
+    def setUp(self):
+        self.user = User.objects.create(
+            phone='+996555123456',
+            full_name='Test User',
+            location='KG'
+        )
+        self.phone_number = UserPhoneNumber.objects.create(
+            user=self.user,
+            phone='+996777888999',
+            label='Home',
+            is_primary=True
+        )
+    
+    def test_phone_number_creation(self):
+        """Test phone number can be created"""
+        self.assertEqual(UserPhoneNumber.objects.count(), 1)
+        self.assertEqual(self.phone_number.phone, '+996777888999')
+        self.assertTrue(self.phone_number.is_primary)
+    
+    def test_phone_number_str(self):
+        """Test string representation"""
+        self.assertIn(self.user.phone, str(self.phone_number))
+        self.assertIn(self.phone_number.phone, str(self.phone_number))
+    
+    def test_primary_unique_per_user(self):
+        """Setting a phone as primary should unset other primaries"""
+        secondary = UserPhoneNumber.objects.create(
+            user=self.user,
+            phone='+996700000001',
+            label='Work',
+            is_primary=True
+        )
+        self.phone_number.refresh_from_db()
+        secondary.refresh_from_db()
+        
+        self.assertTrue(secondary.is_primary)
+        self.assertFalse(self.phone_number.is_primary)
+    
+    def test_unique_phone_per_user(self):
+        """User cannot have duplicate phone numbers"""
+        with self.assertRaises(Exception):
+            UserPhoneNumber.objects.create(
+                user=self.user,
+                phone='+996777888999'
+            )
 

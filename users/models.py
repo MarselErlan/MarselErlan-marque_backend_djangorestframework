@@ -392,3 +392,36 @@ class Notification(models.Model):
         if not self.pk and self.user:
             self.market = self.user.location
         super().save(*args, **kwargs)
+
+
+class UserPhoneNumber(models.Model):
+    """Additional phone numbers for user contact."""
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='phone_numbers')
+    label = models.CharField(max_length=100, null=True, blank=True)
+    phone = models.CharField(max_length=20)
+    is_primary = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'user_phone_numbers'
+        verbose_name = 'Phone Number'
+        verbose_name_plural = 'Phone Numbers'
+        unique_together = ('user', 'phone')
+        ordering = ['-is_primary', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'phone']),
+            models.Index(fields=['user', '-is_primary', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.phone} - {self.phone}"
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_primary:
+            UserPhoneNumber.objects.filter(
+                user=self.user,
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)

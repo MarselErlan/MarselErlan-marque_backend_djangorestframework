@@ -8,7 +8,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     SendVerificationView, VerifyCodeView, LogoutView, ProfileView,
     AddressViewSet, PaymentMethodViewSet, NotificationViewSet,
-    OrderViewSet,
+    PhoneNumberViewSet, OrderViewSet,
 )
 
 # Create router for ViewSets (allow optional trailing slash)
@@ -16,6 +16,7 @@ router = DefaultRouter()
 router.trailing_slash = '/?'
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
+router.register(r'phones', PhoneNumberViewSet, basename='phone-number')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'orders', OrderViewSet, basename='order')
 

@@ -34,7 +34,7 @@ except ImportError:
     TwilioException = Exception
 
 from orders.models import Order
-from .models import Address, PaymentMethod, Notification
+from .models import Address, PaymentMethod, Notification, UserPhoneNumber
 from .serializers import (
     UserSerializer, UserUpdateSerializer,
     AddressSerializer, AddressCreateSerializer,
@@ -47,6 +47,8 @@ from .serializers import (
     OrderListResponseSerializer,
     OrderDetailResponseSerializer, OrderCancelResponseSerializer,
     NotificationListResponseSerializer, NotificationBulkUpdateResponseSerializer,
+    PhoneNumberSerializer, PhoneNumberCreateSerializer,
+    PhoneNumberListResponseSerializer, PhoneNumberDetailResponseSerializer,
 )
 
 User = get_user_model()
@@ -678,6 +680,111 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         return Response({
             'success': True,
             'message': 'Payment method deleted successfully'
+        }, status=status.HTTP_200_OK)
+
+
+# ===========================
+# PHONE NUMBER VIEWS
+# ===========================
+
+class PhoneNumberViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing additional phone numbers
+    GET /api/v1/profile/phones - List phone numbers
+    POST /api/v1/profile/phones - Add phone number
+    PATCH /api/v1/profile/phones/{id} - Update phone number
+    DELETE /api/v1/profile/phones/{id} - Delete phone number
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return UserPhoneNumber.objects.filter(user=self.request.user).order_by('-is_primary', '-created_at')
+    
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return PhoneNumberCreateSerializer
+        return PhoneNumberSerializer
+    
+    @extend_schema(
+        summary="List additional phone numbers",
+        tags=["phones"],
+        responses={200: PhoneNumberListResponseSerializer},
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = PhoneNumberSerializer(queryset, many=True)
+        return Response({
+            'success': True,
+            'phone_numbers': serializer.data,
+            'total': queryset.count()
+        }, status=status.HTTP_200_OK)
+    
+    @extend_schema(
+        summary="Add an additional phone number",
+        tags=["phones"],
+        request=PhoneNumberCreateSerializer,
+        responses={
+            201: PhoneNumberDetailResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            phone_number = UserPhoneNumber.objects.create(
+                user=request.user,
+                **serializer.validated_data
+            )
+            if phone_number.is_primary:
+                UserPhoneNumber.objects.filter(
+                    user=request.user,
+                    is_primary=True
+                ).exclude(pk=phone_number.pk).update(is_primary=False)
+            return Response({
+                'success': True,
+                'message': 'Phone number added successfully',
+                'phone_number': PhoneNumberSerializer(phone_number).data
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @extend_schema(
+        summary="Update an additional phone number",
+        tags=["phones"],
+        request=PhoneNumberCreateSerializer,
+        responses={
+            200: PhoneNumberDetailResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+        },
+    )
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', True)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if serializer.is_valid():
+            phone_number = serializer.save()
+            if phone_number.is_primary:
+                UserPhoneNumber.objects.filter(
+                    user=request.user,
+                    is_primary=True
+                ).exclude(pk=phone_number.pk).update(is_primary=False)
+            return Response({
+                'success': True,
+                'message': 'Phone number updated successfully',
+                'phone_number': PhoneNumberSerializer(phone_number).data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @extend_schema(
+        summary="Delete an additional phone number",
+        tags=["phones"],
+        responses={200: SuccessMessageSerializer},
+    )
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response({
+            'success': True,
+            'message': 'Phone number deleted successfully'
         }, status=status.HTTP_200_OK)
 
 

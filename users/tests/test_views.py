@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
-from users.models import Address, PaymentMethod, Notification
+from users.models import Address, PaymentMethod, Notification, UserPhoneNumber
 
 User = get_user_model()
 
@@ -330,6 +330,61 @@ class AddressAPITest(TestCase):
         
         response = self.client.get(f'/api/v1/profile/addresses/{other_address.id}')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+@override_settings(TESTING=True)
+class PhoneNumberAPITest(TestCase):
+    """Integration tests for phone number endpoints"""
+    
+    def setUp(self):
+        self.user = User.objects.create(
+            phone='+996555123456',
+            location='KG'
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+        
+        self.phone_number = UserPhoneNumber.objects.create(
+            user=self.user,
+            phone='+996777888999',
+            label='Home',
+            is_primary=True
+        )
+    
+    def test_list_phone_numbers(self):
+        response = self.client.get('/api/v1/profile/phones')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['total'], 1)
+    
+    def test_create_phone_number(self):
+        response = self.client.post('/api/v1/profile/phones', {
+            'label': 'Work',
+            'phone': '+996700000001',
+            'is_primary': False
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(UserPhoneNumber.objects.filter(user=self.user).count(), 2)
+    
+    def test_update_phone_number(self):
+        response = self.client.patch(f'/api/v1/profile/phones/{self.phone_number.id}', {
+            'label': 'Primary',
+            'is_primary': True
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.phone_number.refresh_from_db()
+        self.assertTrue(self.phone_number.is_primary)
+    
+    def test_delete_phone_number(self):
+        response = self.client.delete(f'/api/v1/profile/phones/{self.phone_number.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(UserPhoneNumber.objects.filter(user=self.user).count(), 0)
 
 
 @override_settings(TESTING=True)

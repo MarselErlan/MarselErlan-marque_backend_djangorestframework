@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, VerificationCode, Address, PaymentMethod, Notification
+from .models import User, VerificationCode, Address, PaymentMethod, Notification, UserPhoneNumber
 
 
 @admin.register(User)
@@ -125,3 +125,11 @@ class NotificationAdmin(admin.ModelAdmin):
             'fields': ('created_at',)
         }),
     )
+
+
+@admin.register(UserPhoneNumber)
+class UserPhoneNumberAdmin(admin.ModelAdmin):
+    list_display = ('user', 'phone', 'label', 'is_primary', 'created_at')
+    list_filter = ('is_primary', 'created_at')
+    search_fields = ('user__phone', 'phone', 'label')
+    ordering = ('-is_primary', '-created_at')

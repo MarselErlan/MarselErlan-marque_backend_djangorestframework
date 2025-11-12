@@ -6,7 +6,7 @@ Handles serialization/deserialization of User, Address, PaymentMethod, Notificat
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from orders.models import Order, OrderItem
-from .models import Address, PaymentMethod, VerificationCode, Notification
+from .models import Address, PaymentMethod, VerificationCode, Notification, UserPhoneNumber
 
 User = get_user_model()
 
@@ -205,7 +205,7 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
         if not (1 <= int(value) <= 12):
             raise serializers.ValidationError("Month must be between 1 and 12")
         return value
-    
+
     def validate_expiry_year(self, value):
         from datetime import datetime
         current_year = datetime.now().year
@@ -214,6 +214,33 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
         return value
 
 
+class PhoneNumberSerializer(serializers.ModelSerializer):
+    """Serializer for additional phone numbers."""
+    
+    class Meta:
+        model = UserPhoneNumber
+        fields = ['id', 'label', 'phone', 'is_primary', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class PhoneNumberCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating phone numbers."""
+    
+    class Meta:
+        model = UserPhoneNumber
+        fields = ['label', 'phone', 'is_primary']
+    
+    def validate_phone(self, value):
+        phone = value.replace(' ', '').replace('-', '')
+        if not phone:
+            raise serializers.ValidationError("Phone number is required.")
+        if not phone.startswith('+'):
+            raise serializers.ValidationError("Phone number must include country code (e.g., +996...).")
+        digits = ''.join(ch for ch in phone if ch.isdigit())
+        if len(digits) < 6:
+            raise serializers.ValidationError("Phone number is too short.")
+        return value
+    
 class NotificationSerializer(serializers.ModelSerializer):
     """Serializer for Notification model"""
     
@@ -425,4 +452,20 @@ class NotificationBulkUpdateResponseSerializer(serializers.Serializer):
     success = serializers.BooleanField()
     message = serializers.CharField()
     count = serializers.IntegerField(required=False)
+
+
+class PhoneNumberListResponseSerializer(serializers.Serializer):
+    """Response serializer for phone number list."""
+
+    success = serializers.BooleanField()
+    phone_numbers = PhoneNumberSerializer(many=True)
+    total = serializers.IntegerField()
+
+
+class PhoneNumberDetailResponseSerializer(serializers.Serializer):
+    """Response serializer for phone number create/update."""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    phone_number = PhoneNumberSerializer()
 

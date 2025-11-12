@@ -11,10 +11,10 @@ from users.serializers import (
     UserSerializer, UserUpdateSerializer,
     AddressSerializer, AddressCreateSerializer,
     PaymentMethodSerializer, PaymentMethodCreateSerializer,
-    NotificationSerializer,
+    NotificationSerializer, PhoneNumberSerializer, PhoneNumberCreateSerializer,
     SendVerificationSerializer, VerifyCodeSerializer
 )
-from users.models import Address, PaymentMethod, Notification
+from users.models import Address, PaymentMethod, Notification, UserPhoneNumber
 
 User = get_user_model()
 
@@ -270,6 +270,44 @@ class NotificationSerializerTest(TestCase):
         self.assertIn('is_read', data)
         self.assertIn('order_id', data)
         self.assertIn('market', data)
+
+
+class PhoneNumberSerializerTest(TestCase):
+    """Test PhoneNumberSerializer and PhoneNumberCreateSerializer"""
+    
+    def setUp(self):
+        self.user = User.objects.create(
+            phone='+996555123456',
+            location='KG'
+        )
+        self.phone_number = UserPhoneNumber.objects.create(
+            user=self.user,
+            phone='+996777888999',
+            label='Home',
+            is_primary=True
+        )
+    
+    def test_phone_number_serializer_fields(self):
+        serializer = PhoneNumberSerializer(instance=self.phone_number)
+        data = serializer.data
+        
+        self.assertIn('id', data)
+        self.assertIn('phone', data)
+        self.assertIn('label', data)
+        self.assertIn('is_primary', data)
+    
+    def test_phone_number_create_serializer_valid(self):
+        serializer = PhoneNumberCreateSerializer(data={
+            'label': 'Work',
+            'phone': '+996700000001',
+            'is_primary': False
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+    
+    def test_phone_number_create_serializer_invalid(self):
+        serializer = PhoneNumberCreateSerializer(data={'phone': '12345'})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('phone', serializer.errors)
 
 
 class AuthenticationSerializersTest(TestCase):
