@@ -31,7 +31,7 @@ urlpatterns = [
     path('api/v1/', include('users.urls')),  # Authentication & Profile
     path('api/v1/', include('products.urls')),  # Product catalogue
     path('api/v1/', include('banners.urls')),  # Banners
-    path('api/v1/', include('orders.urls')),  # Orders
+    path('api/v1/orders/', include('orders.urls')),  # Orders
     path('api/ai/', include('ai_assistant.urls')),  # AI-powered recommendations
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

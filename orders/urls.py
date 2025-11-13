@@ -2,12 +2,12 @@
 URLs for Orders App
 """
 
-from django.urls import path
+from django.urls import path, re_path
 from . import views
 
 app_name = 'orders'
 
 urlpatterns = [
-    path('create/', views.create_order, name='create'),
+    re_path(r'^create/?$', views.create_order, name='create'),
 ]
 
