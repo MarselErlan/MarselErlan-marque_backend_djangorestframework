@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 import sys
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables from .env file
 load_dotenv()
@@ -223,14 +224,58 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Media files
 MEDIA_URL = '/media/'
-
 MEDIA_ROOT = BASE_DIR / 'media'
 
+USE_S3_MEDIA = os.getenv('USE_AWS_S3', 'False').lower() == 'true'
 
 # Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
+}
+
+if USE_S3_MEDIA:
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+    if not AWS_STORAGE_BUCKET_NAME:
+        raise ImproperlyConfigured("USE_AWS_S3 is True but AWS_STORAGE_BUCKET_NAME is not set.")
+
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')
+    AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+    AWS_S3_SIGNATURE_VERSION = os.getenv('AWS_S3_SIGNATURE_VERSION', 's3v4')
+    AWS_S3_ADDRESSING_STYLE = os.getenv('AWS_S3_ADDRESSING_STYLE', 'auto')
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'public, max-age=86400',
+    }
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = os.getenv('AWS_QUERYSTRING_AUTH', 'False').lower() == 'true'
+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    }
+
+    override_media_url = os.getenv('AWS_MEDIA_URL')
+    if override_media_url:
+        MEDIA_URL = override_media_url.rstrip('/') + '/'
+    elif AWS_S3_CUSTOM_DOMAIN:
+        domain = AWS_S3_CUSTOM_DOMAIN.rstrip('/')
+        if not domain.startswith('http://') and not domain.startswith('https://'):
+            domain = f"https://{domain}"
+        MEDIA_URL = f"{domain}/"
+    elif AWS_S3_ENDPOINT_URL:
+        endpoint = AWS_S3_ENDPOINT_URL.rstrip('/')
+        MEDIA_URL = f"{endpoint}/{AWS_STORAGE_BUCKET_NAME}/"
+    else:
+        if AWS_S3_REGION_NAME == 'us-east-1':
+            domain = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
+        else:
+            domain = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com"
+        MEDIA_URL = f"{domain}/"
 
 SPECTACULAR_SETTINGS = {
        

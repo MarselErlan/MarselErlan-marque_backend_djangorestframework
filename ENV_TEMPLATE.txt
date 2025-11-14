@@ -46,3 +46,14 @@ TWILIO_VERIFY_SERVICE_SID=your_twilio_verify_service_sid_here
 # 3. Replace 'your_xxx_here' with your actual credentials
 # 4. Never commit .env to version control!
 
+# ============================================
+# AWS S3 MEDIA STORAGE (Optional - for user uploads)
+# ============================================
+AWS_STORAGE_BUCKET_NAME=your-s3-bucket
+AWS_S3_REGION_NAME=us-east-1
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+# Optional overrides (only if using CloudFront or custom domains)
+AWS_S3_CUSTOM_DOMAIN=
+AWS_S3_SIGNATURE_VERSION=s3v4
+AWS_QUERYSTRING_AUTH=False

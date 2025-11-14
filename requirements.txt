@@ -31,3 +31,7 @@ whitenoise==6.6.0
 
 drf-spectacular==0.29.0
 drf-spectacular-sidecar==2025.10.1
+
+# Media storage
+boto3==1.35.46
+django-storages[boto3]==1.14.2
