@@ -16,7 +16,8 @@ from .models import StoreManager, ManagerSettings, RevenueSnapshot
 from .serializers import (
     ManagerOrderListSerializer, ManagerOrderDetailSerializer,
     OrderStatusUpdateSerializer, DashboardStatsSerializer,
-    RevenueAnalyticsSerializer, SuccessMessageSerializer
+    RevenueAnalyticsSerializer, SuccessMessageSerializer,
+    ManagerStatusSerializer
 )
 from .utils import (
     get_active_orders_count, get_today_orders, get_today_revenue,
@@ -146,6 +147,72 @@ OFFSET_PARAM = OpenApiParameter(
     description='Number of results to skip',
     required=False
 )
+
+
+@extend_schema(
+    summary="Check manager status",
+    description="Check if the current user is a store manager and return manager information",
+    responses={
+        200: ManagerStatusSerializer,
+        401: OpenApiResponse(description="Authentication required"),
+    },
+    tags=["store-manager"],
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_manager_status(request):
+    """
+    Check if the current user is a store manager.
+    
+    Returns:
+    - is_manager: Boolean indicating if user is a manager
+    - manager_id: Manager ID if user is a manager
+    - role: Manager role (admin, manager, viewer)
+    - accessible_markets: List of markets the manager can access
+    - can_manage_kg: Whether manager can manage KG market
+    - can_manage_us: Whether manager can manage US market
+    - is_active: Whether manager is active
+    """
+    manager = get_manager(request)
+    
+    if not manager:
+        return Response({
+            'is_manager': False,
+            'manager_id': None,
+            'role': None,
+            'accessible_markets': [],
+            'can_manage_kg': False,
+            'can_manage_us': False,
+            'is_active': False,
+        }, status=status.HTTP_200_OK)
+    
+    # Update last login
+    manager.last_login = timezone.now()
+    manager.save(update_fields=['last_login'])
+    
+    # Log activity
+    try:
+        log_manager_activity(
+            manager=manager,
+            action_type='login',
+            market=None,
+            description='Manager logged in',
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT'),
+        )
+    except Exception:
+        # Silently fail if logging fails
+        pass
+    
+    return Response({
+        'is_manager': True,
+        'manager_id': manager.id,
+        'role': manager.role,
+        'accessible_markets': manager.accessible_markets,
+        'can_manage_kg': manager.can_manage_kg,
+        'can_manage_us': manager.can_manage_us,
+        'is_active': manager.is_active,
+    }, status=status.HTTP_200_OK)
 
 
 @extend_schema(

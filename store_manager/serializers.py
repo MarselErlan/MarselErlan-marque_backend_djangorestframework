@@ -124,3 +124,19 @@ class SuccessMessageSerializer(serializers.Serializer):
     success = serializers.BooleanField()
     message = serializers.CharField()
 
+
+class ManagerStatusSerializer(serializers.Serializer):
+    """Serializer for manager status check"""
+    
+    is_manager = serializers.BooleanField()
+    manager_id = serializers.IntegerField(required=False, allow_null=True)
+    role = serializers.CharField(required=False, allow_null=True)
+    accessible_markets = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_null=True
+    )
+    can_manage_kg = serializers.BooleanField(required=False)
+    can_manage_us = serializers.BooleanField(required=False)
+    is_active = serializers.BooleanField(required=False)
+

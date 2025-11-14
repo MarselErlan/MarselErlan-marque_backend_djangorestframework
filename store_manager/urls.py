@@ -8,6 +8,9 @@ from . import views
 app_name = 'store_manager'
 
 urlpatterns = [
+    # Manager status check
+    re_path(r'^check-status/?$', views.check_manager_status, name='check-manager-status'),
+    
     # Dashboard stats
     re_path(r'^dashboard/stats/?$', views.dashboard_stats, name='dashboard-stats'),
     
