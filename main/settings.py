@@ -224,11 +224,8 @@ CSRF_TRUSTED_ORIGINS = [
 # Media files
 MEDIA_URL = '/media/'
 
-MEDIA_ROOT = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
 
 # Static files
 STATIC_URL = '/static/'
