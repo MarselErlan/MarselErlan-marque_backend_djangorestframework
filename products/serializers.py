@@ -62,6 +62,7 @@ class CategoryListSerializer(CategorySummarySerializer):
 class SubcategoryListSerializer(SubcategorySummarySerializer):
     """Full representation of a subcategory for catalog listings."""
 
+    image_url = serializers.SerializerMethodField()
     product_count = serializers.IntegerField(read_only=True)
 
     class Meta(SubcategorySummarySerializer.Meta):
@@ -72,6 +73,18 @@ class SubcategoryListSerializer(SubcategorySummarySerializer):
             "sort_order",
             "product_count",
         )
+
+    def get_image_url(self, obj: Subcategory) -> Optional[str]:
+        if getattr(obj, "image", None):
+            url = obj.image.url
+            request = self.context.get("request") if hasattr(self, "context") else None
+            return request.build_absolute_uri(url) if request else url
+        if obj.image_url:
+            request = self.context.get("request") if hasattr(self, "context") else None
+            if request and obj.image_url.startswith("/"):
+                return request.build_absolute_uri(obj.image_url)
+            return obj.image_url
+        return None
 
 
 class CategoryDetailSerializer(CategoryListSerializer):

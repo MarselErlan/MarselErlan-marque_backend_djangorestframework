@@ -52,6 +52,7 @@ class Subcategory(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=120, blank=True)
     description = models.TextField(null=True, blank=True)
+    image = models.ImageField(upload_to='categories/subcategories/', null=True, blank=True)
     image_url = models.URLField(max_length=500, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=0)
