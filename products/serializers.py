@@ -111,6 +111,7 @@ class SKUSerializer(serializers.ModelSerializer):
 
     size = serializers.CharField(source="size_option.name", read_only=True)
     color = serializers.CharField(source="color_option.name", read_only=True)
+    color_hex = serializers.CharField(source="color_option.hex_code", read_only=True)
     size_option_id = serializers.IntegerField(source="size_option.id", read_only=True)
     color_option_id = serializers.IntegerField(source="color_option.id", read_only=True)
     price = serializers.SerializerMethodField()
@@ -126,6 +127,7 @@ class SKUSerializer(serializers.ModelSerializer):
             "size_option_id",
             "color",
             "color_option_id",
+            "color_hex",
             "price",
             "original_price",
             "stock",

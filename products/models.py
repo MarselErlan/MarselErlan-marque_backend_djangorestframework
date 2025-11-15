@@ -419,8 +419,7 @@ class ProductColorOption(models.Model):
     hex_code = models.CharField(
         max_length=7,
         null=True,
-        blank=True,
-        help_text="Optional HEX code (#FFFFFF).",
+        help_text="HEX code (#FFFFFF).",
     )
     is_active = models.BooleanField(default=True)
 
