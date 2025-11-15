@@ -11,6 +11,8 @@ from products.models import (
     Category,
     Product,
     ProductFeature,
+    ProductSizeOption,
+    ProductColorOption,
     SKU,
     Subcategory,
 )
@@ -75,11 +77,16 @@ class ProductSerializerTests(TestCase):
             is_active=True,
         )
 
+        size_s = ProductSizeOption.objects.create(product=cls.product, name="S", sort_order=1)
+        size_m = ProductSizeOption.objects.create(product=cls.product, name="M", sort_order=2)
+        color_s_black = ProductColorOption.objects.create(product=cls.product, size=size_s, name="black")
+        color_m_white = ProductColorOption.objects.create(product=cls.product, size=size_m, name="white")
+
         SKU.objects.create(
             product=cls.product,
             sku_code="MARQUE-S-BLACK",
-            size="S",
-            color="black",
+            size_option=size_s,
+            color_option=color_s_black,
             price=Decimal("2300.00"),
             original_price=Decimal("2800.00"),
             stock=5,
@@ -89,8 +96,8 @@ class ProductSerializerTests(TestCase):
         SKU.objects.create(
             product=cls.product,
             sku_code="MARQUE-M-WHITE",
-            size="M",
-            color="white",
+            size_option=size_m,
+            color_option=color_m_white,
             price=Decimal("2600.00"),
             original_price=Decimal("3000.00"),
             stock=3,

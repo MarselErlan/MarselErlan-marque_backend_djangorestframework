@@ -109,6 +109,10 @@ class ProductImageSerializer(serializers.ModelSerializer):
 class SKUSerializer(serializers.ModelSerializer):
     """Serializer for product variants (Size/Color combinations)."""
 
+    size = serializers.CharField(source="size_option.name", read_only=True)
+    color = serializers.CharField(source="color_option.name", read_only=True)
+    size_option_id = serializers.IntegerField(source="size_option.id", read_only=True)
+    color_option_id = serializers.IntegerField(source="color_option.id", read_only=True)
     price = serializers.SerializerMethodField()
     original_price = serializers.SerializerMethodField()
     variant_image = serializers.SerializerMethodField()
@@ -119,7 +123,9 @@ class SKUSerializer(serializers.ModelSerializer):
             "id",
             "sku_code",
             "size",
+            "size_option_id",
             "color",
+            "color_option_id",
             "price",
             "original_price",
             "stock",

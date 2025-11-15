@@ -235,12 +235,16 @@ class MarketAwareAPIView(APIView):
         """
         Base queryset with common select/prefetch combinations.
         """
+        sku_prefetch = Prefetch(
+            "skus",
+            queryset=SKU.objects.select_related("size_option", "color_option"),
+        )
         return (
             Product.objects.filter(is_active=True)
             .select_related("category", "subcategory")
             .prefetch_related(
                 "images",
-                "skus",
+                sku_prefetch,
                 "features",
             )
         )
@@ -433,13 +437,13 @@ class SubcategoryProductsView(MarketAwareAPIView):
     def _apply_attribute_filters(queryset, request):
         if sizes := request.query_params.get("sizes"):
             queryset = queryset.filter(
-                skus__size__in=[
+                skus__size_option__name__in=[
                     size.strip() for size in sizes.split(",") if size.strip()
                 ]
             )
         if colors := request.query_params.get("colors"):
             queryset = queryset.filter(
-                skus__color__in=[
+                skus__color_option__name__in=[
                     color.strip() for color in colors.split(",") if color.strip()
                 ]
             )
@@ -464,14 +468,14 @@ class SubcategoryProductsView(MarketAwareAPIView):
     @staticmethod
     def _get_available_filters(base_queryset):
         sizes = (
-            base_queryset.values_list("skus__size", flat=True)
+            base_queryset.values_list("skus__size_option__name", flat=True)
             .distinct()
-            .exclude(skus__size__isnull=True)
+            .exclude(skus__size_option__name__isnull=True)
         )
         colors = (
-            base_queryset.values_list("skus__color", flat=True)
+            base_queryset.values_list("skus__color_option__name", flat=True)
             .distinct()
-            .exclude(skus__color__isnull=True)
+            .exclude(skus__color_option__name__isnull=True)
         )
         brands = (
             base_queryset.values_list("brand", flat=True)
@@ -1186,10 +1190,10 @@ class ProductSearchView(MarketAwareAPIView):
             queryset = queryset.filter(subcategory__slug=subcategory_slug)
 
         if sizes := request.query_params.get("sizes"):
-            queryset = queryset.filter(skus__size__in=[size.strip() for size in sizes.split(",") if size.strip()])
+            queryset = queryset.filter(skus__size_option__name__in=[size.strip() for size in sizes.split(",") if size.strip()])
 
         if colors := request.query_params.get("colors"):
-            queryset = queryset.filter(skus__color__in=[color.strip() for color in colors.split(",") if color.strip()])
+            queryset = queryset.filter(skus__color_option__name__in=[color.strip() for color in colors.split(",") if color.strip()])
 
         if brands := request.query_params.get("brands"):
             queryset = queryset.filter(brand__in=[brand.strip() for brand in brands.split(",") if brand.strip()])

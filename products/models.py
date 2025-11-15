@@ -2,6 +2,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils.text import slugify
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
 from users.models import User
 
 
@@ -378,6 +379,70 @@ class ProductFeature(models.Model):
         return f"{self.product.name} - {self.feature_text[:50]}"
 
 
+class ProductSizeOption(models.Model):
+    """Declarative list of sizes available for a product."""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='size_options',
+    )
+    name = models.CharField(max_length=50)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'product_size_options'
+        verbose_name = 'Product Size'
+        verbose_name_plural = 'Product Sizes'
+        ordering = ['product', 'sort_order', 'name']
+        unique_together = ('product', 'name')
+
+    def __str__(self):
+        return f"{self.product.name} • {self.name}"
+
+
+class ProductColorOption(models.Model):
+    """Color choices scoped to a specific size."""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='color_options',
+    )
+    size = models.ForeignKey(
+        ProductSizeOption,
+        on_delete=models.CASCADE,
+        related_name='color_options',
+    )
+    name = models.CharField(max_length=50)
+    hex_code = models.CharField(
+        max_length=7,
+        null=True,
+        blank=True,
+        help_text="Optional HEX code (#FFFFFF).",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'product_color_options'
+        verbose_name = 'Product Color'
+        verbose_name_plural = 'Product Colors'
+        ordering = ['product', 'size__sort_order', 'size__name', 'name']
+        unique_together = ('product', 'size', 'name')
+
+    def __str__(self):
+        return f"{self.product.name} • {self.size.name} • {self.name}"
+
+    def clean(self):
+        if self.size and self.product and self.size.product_id != self.product_id:
+            raise ValidationError("Selected size does not belong to this product.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class SKU(models.Model):
     """Product SKUs (Stock Keeping Units) - Product variants"""
     
@@ -385,8 +450,24 @@ class SKU(models.Model):
     sku_code = models.CharField(max_length=100, unique=True)
     
     # Variant attributes
-    size = models.CharField(max_length=20)  # e.g., "S", "M", "L", "XL", "42", "43"
-    color = models.CharField(max_length=50)  # e.g., "Black", "White", "Red"
+    size_option = models.ForeignKey(
+        ProductSizeOption,
+        on_delete=models.CASCADE,
+        related_name='skus',
+        null=True,
+        blank=True,
+    )
+    color_option = models.ForeignKey(
+        ProductColorOption,
+        on_delete=models.CASCADE,
+        related_name='skus',
+        null=True,
+        blank=True,
+    )
+    
+    # Legacy labels (kept for data compatibility)
+    size_label = models.CharField(max_length=20, editable=False, blank=True, db_column='size')
+    color_label = models.CharField(max_length=50, editable=False, blank=True, db_column='color')
     
     # Pricing (can override product price)
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -409,8 +490,8 @@ class SKU(models.Model):
         db_table = 'skus'
         verbose_name = 'SKU'
         verbose_name_plural = 'SKUs'
-        ordering = ['product', 'size', 'color']
-        unique_together = ['product', 'size', 'color']
+        ordering = ['product', 'size_option__sort_order', 'size_option__name', 'color_option__name']
+        unique_together = ['product', 'size_option', 'color_option']
         indexes = [
             models.Index(fields=['sku_code']),
             models.Index(fields=['product', 'is_active']),
@@ -419,12 +500,33 @@ class SKU(models.Model):
     def __str__(self):
         return f"{self.product.name} - {self.size} / {self.color}"
     
+    def clean(self):
+        errors = {}
+        if self.size_option and self.size_option.product_id != self.product_id:
+            errors['size_option'] = "Selected size does not belong to this product."
+        if self.color_option:
+            if self.color_option.product_id != self.product_id:
+                errors['color_option'] = "Selected color does not belong to this product."
+            elif self.color_option.size_id != getattr(self.size_option, 'id', None):
+                errors['color_option'] = "Selected color is not available for the chosen size."
+        if errors:
+            raise ValidationError(errors)
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         if not self.sku_code:
             # Auto-generate SKU code
             base_code = f"{self.product.slug[:20]}-{self.size}-{self.color}".upper().replace(' ', '-')
             self.sku_code = base_code
         super().save(*args, **kwargs)
+
+    @property
+    def size(self):
+        return self.size_option.name if self.size_option else None
+
+    @property
+    def color(self):
+        return self.color_option.name if self.color_option else None
 
 
 class Cart(models.Model):
