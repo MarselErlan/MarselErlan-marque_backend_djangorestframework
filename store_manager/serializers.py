@@ -31,7 +31,7 @@ class ManagerOrderListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'status', 'customer_name', 'customer_phone',
             'delivery_address', 'delivery_city', 'total_amount', 'currency',
-            'order_date', 'items_count', 'items'
+            'order_date', 'requested_delivery_date', 'items_count', 'items'
         ]
         read_only_fields = ['id', 'order_number', 'order_date']
 
@@ -48,6 +48,7 @@ class ManagerOrderDetailSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'status', 'customer_name', 'customer_phone',
             'customer_email', 'delivery_address', 'delivery_city', 'delivery_state',
             'delivery_postal_code', 'delivery_country', 'delivery_notes',
+            'requested_delivery_date',
             'payment_method', 'payment_status', 'card_type', 'card_last_four',
             'subtotal', 'shipping_cost', 'tax', 'total_amount', 'currency', 'currency_code',
             'order_date', 'confirmed_date', 'shipped_date', 'delivered_date',
