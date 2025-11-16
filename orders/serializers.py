@@ -32,6 +32,7 @@ class OrderCreateSerializer(serializers.Serializer):
     delivery_state = serializers.CharField(required=False, allow_blank=True)
     delivery_postal_code = serializers.CharField(required=False, allow_blank=True)
     delivery_notes = serializers.CharField(required=False, allow_blank=True)
+    requested_delivery_date = serializers.DateField(required=False, allow_null=True)
     
     shipping_address_id = serializers.IntegerField(required=False, allow_null=True)
     payment_method_used_id = serializers.IntegerField(required=False, allow_null=True)
@@ -77,7 +78,8 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'status', 'customer_name', 'customer_phone',
             'delivery_address', 'delivery_city', 'delivery_state', 'delivery_postal_code',
-            'delivery_country', 'payment_method', 'payment_status',
+            'delivery_country', 'delivery_notes', 'requested_delivery_date',
+            'payment_method', 'payment_status',
             'subtotal', 'shipping_cost', 'tax', 'total_amount', 'currency', 'currency_code',
             'order_date', 'items', 'items_count'
         ]

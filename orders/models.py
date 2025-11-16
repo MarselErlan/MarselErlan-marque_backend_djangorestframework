@@ -84,6 +84,7 @@ class Order(models.Model):
     delivery_postal_code = models.CharField(max_length=20, null=True, blank=True)
     delivery_country = models.CharField(max_length=100, default='Kyrgyzstan')
     delivery_notes = models.TextField(null=True, blank=True)
+    requested_delivery_date = models.DateField(null=True, blank=True, help_text="Date when customer wants the order delivered")
     
     # Order status
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)

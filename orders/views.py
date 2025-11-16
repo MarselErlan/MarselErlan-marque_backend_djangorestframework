@@ -119,6 +119,7 @@ def create_order(request):
         delivery_state=validated_data.get('delivery_state', ''),
         delivery_postal_code=validated_data.get('delivery_postal_code', ''),
         delivery_notes=validated_data.get('delivery_notes', ''),
+        requested_delivery_date=validated_data.get('requested_delivery_date'),
         payment_method=validated_data.get('payment_method', 'cash'),
         subtotal=subtotal,
         shipping_cost=shipping_cost,
