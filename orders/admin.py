@@ -22,7 +22,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ('market', 'status', 'payment_method', 'card_type', 'payment_status', 'order_date', 'created_at')
     search_fields = ('order_number', 'customer_name', 'customer_phone', 'customer_email', 'user__phone', 'card_last_four')
     ordering = ('-created_at',)
-    readonly_fields = ('order_number', 'market', 'delivery_country', 'card_last_four', 'created_at', 'updated_at', 'items_count', 'is_active', 'can_cancel')
+    readonly_fields = ('order_number', 'market', 'delivery_country', 'card_last_four', 'order_date', 'created_at', 'updated_at', 'items_count', 'is_active', 'can_cancel')
     
     inlines = [OrderItemInline, OrderStatusHistoryInline]
     
@@ -38,8 +38,8 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': ('customer_name', 'customer_phone', 'customer_email')
         }),
         ('Delivery Information (Snapshot)', {
-            'fields': ('delivery_address', 'delivery_city', 'delivery_state', 'delivery_postal_code', 'delivery_country', 'delivery_notes'),
-            'description': 'Snapshot of delivery info at order time'
+            'fields': ('delivery_address', 'delivery_city', 'delivery_state', 'delivery_postal_code', 'delivery_country', 'delivery_notes', 'requested_delivery_date'),
+            'description': 'Snapshot of delivery info at order time. requested_delivery_date is when customer wants delivery.'
         }),
         ('Payment (Snapshot)', {
             'fields': ('payment_method', 'card_type', 'card_last_four', 'payment_status'),
