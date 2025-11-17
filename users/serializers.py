@@ -287,6 +287,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     items_count = serializers.IntegerField(read_only=True)
     delivery_date = serializers.SerializerMethodField()
+    has_review = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -301,11 +302,32 @@ class OrderListSerializer(serializers.ModelSerializer):
             'delivery_address',
             'items_count',
             'items',
+            'has_review',
         ]
 
     def get_delivery_date(self, obj):
         delivery = obj.delivery_date
         return delivery.isoformat() if delivery else None
+    
+    def get_has_review(self, obj):
+        """Check if the current user has reviewed any product in this order"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        from orders.models import Review
+        # Check if user has reviewed any product in this order
+        # We check for the first product in the order (as that's what the UI uses)
+        if obj.items.exists():
+            first_item = obj.items.first()
+            if first_item.sku and first_item.sku.product:
+                has_review = Review.objects.filter(
+                    user=request.user,
+                    order=obj,
+                    product=first_item.sku.product
+                ).exists()
+                return has_review
+        return False
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
@@ -313,6 +335,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     items = OrderItemSerializer(many=True, read_only=True)
     delivery_date = serializers.SerializerMethodField()
+    has_review = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -343,11 +366,32 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'card_type',
             'card_last_four',
             'items',
+            'has_review',
         ]
 
     def get_delivery_date(self, obj):
         delivery = obj.delivery_date
         return delivery.isoformat() if delivery else None
+    
+    def get_has_review(self, obj):
+        """Check if the current user has reviewed any product in this order"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        from orders.models import Review
+        # Check if user has reviewed any product in this order
+        # We check for the first product in the order (as that's what the UI uses)
+        if obj.items.exists():
+            first_item = obj.items.first()
+            if first_item.sku and first_item.sku.product:
+                has_review = Review.objects.filter(
+                    user=request.user,
+                    order=obj,
+                    product=first_item.sku.product
+                ).exists()
+                return has_review
+        return False
 
 
 # Authentication Serializers

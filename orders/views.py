@@ -173,7 +173,7 @@ def create_order(request):
 
 @extend_schema(
     summary="Create a review for an order product",
-    description="Create a review with images for a product from an order. Images are required.",
+    description="Create a review with optional images for a product from an order.",
     request={
         'multipart/form-data': {
             'type': 'object',
@@ -185,7 +185,7 @@ def create_order(request):
                 'title': {'type': 'string', 'required': False},
                 'images': {'type': 'array', 'items': {'type': 'string', 'format': 'binary'}},
             },
-            'required': ['order_id', 'product_id', 'rating', 'comment', 'images'],
+            'required': ['order_id', 'product_id', 'rating', 'comment'],
         }
     },
     responses={
@@ -208,7 +208,7 @@ def create_review(request):
     - rating: Rating from 1 to 5 (required)
     - comment: Review text (required)
     - title: Review title (optional)
-    - images: One or more image files (required)
+    - images: One or more image files (optional)
     """
     # Handle multipart form data
     data = request.data.copy()
@@ -225,13 +225,7 @@ def create_review(request):
         # Fallback for single image field name
         images = [request.FILES['image']]
     
-    if not images:
-        return Response(
-            {'error': 'At least one image is required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Validate image files
+    # Validate image files if provided
     for image in images:
         if not image.content_type.startswith('image/'):
             return Response(
@@ -287,7 +281,7 @@ def create_review(request):
         is_approved=False,  # Requires admin approval
     )
     
-    # Create review images
+    # Create review images if provided
     for image_file in images:
         ReviewImage.objects.create(
             review=review,

@@ -804,11 +804,16 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Return orders for the current user with optional status filter"""
+        from orders.models import Review
         queryset = (
             Order.objects
             .filter(user=self.request.user)
             .select_related('shipping_address', 'payment_method_used')
-            .prefetch_related('items__sku__product')
+            .prefetch_related(
+                'items__sku__product',
+                'reviews__product',
+                'reviews__user'
+            )
             .order_by('-order_date')
         )
 
@@ -836,7 +841,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
 
         total = queryset.count()
         orders = queryset[offset:offset + limit]
-        serializer = self.get_serializer(orders, many=True)
+        serializer = self.get_serializer(orders, many=True, context={'request': request})
         has_more = (offset + limit) < total
 
         return Response({
@@ -853,7 +858,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def retrieve(self, request, *args, **kwargs):
         order = self.get_object()
-        serializer = self.get_serializer(order)
+        serializer = self.get_serializer(order, context={'request': request})
         return Response({
             'success': True,
             'order': serializer.data
