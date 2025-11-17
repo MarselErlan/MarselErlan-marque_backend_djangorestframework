@@ -1122,7 +1122,12 @@ class ProductBestSellerView(ProductListView):
         from django.db.models import Sum, Q, IntegerField, Value
         from django.db.models.functions import Coalesce
         
+        # Get base queryset with market filtering already applied by parent
         queryset = super().get_queryset(request)
+        
+        # Ensure market filtering is applied (in case parent didn't apply it)
+        market = self.resolve_market(request)
+        queryset = self.apply_market_filter(queryset, market)
         
         # Annotate with actual sold count from OrderItems
         # OrderItem -> SKU -> Product relationship

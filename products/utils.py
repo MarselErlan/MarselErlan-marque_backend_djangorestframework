@@ -9,6 +9,12 @@ def filter_by_market(queryset, user_market):
     Filter queryset by user's market.
     Returns items that match user's market OR are available in all markets.
     
+    For a user with market='US', this will return products where:
+    - market = 'US' OR market = 'ALL'
+    
+    For a user with market='KG', this will return products where:
+    - market = 'KG' OR market = 'ALL'
+    
     Args:
         queryset: Django queryset with 'market' field
         user_market: User's market code ('KG', 'US', etc.)
@@ -18,8 +24,17 @@ def filter_by_market(queryset, user_market):
     
     Example:
         products = Product.objects.filter(is_active=True)
-        products = filter_by_market(products, request.user.location)
+        products = filter_by_market(products, 'US')
+        # Returns products where market='US' OR market='ALL'
     """
+    if not user_market:
+        return queryset
+    
+    # Normalize market to uppercase
+    user_market = str(user_market).upper()
+    
+    # Filter: Show products in user's market AND products available in ALL markets
+    # Using OR operator: market = user_market OR market = 'ALL'
     return queryset.filter(Q(market=user_market) | Q(market='ALL'))
 
 
