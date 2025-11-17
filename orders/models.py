@@ -264,7 +264,8 @@ class ReviewImage(models.Model):
     """Review images uploaded by customers"""
     
     review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name='images')
-    image_url = models.URLField(max_length=500)
+    image = models.ImageField(upload_to='orders/reviews/', null=True, blank=True)
+    image_url = models.URLField(max_length=500, null=True, blank=True, help_text="Optional: External image URL (if not uploading a file)")
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

@@ -79,7 +79,7 @@ class OrderStatusHistoryAdmin(admin.ModelAdmin):
 class ReviewImageInline(admin.TabularInline):
     model = ReviewImage
     extra = 1
-    fields = ('image_url',)
+    fields = ('image', 'image_url')
 
 
 @admin.register(Review)
@@ -111,7 +111,8 @@ class ReviewAdmin(admin.ModelAdmin):
 
 @admin.register(ReviewImage)
 class ReviewImageAdmin(admin.ModelAdmin):
-    list_display = ('review', 'created_at')
+    list_display = ('review', 'image', 'created_at')
     search_fields = ('review__user__phone', 'review__product__name')
     ordering = ('-created_at',)
     readonly_fields = ('created_at',)
+    fields = ('review', 'image', 'image_url', 'created_at')
