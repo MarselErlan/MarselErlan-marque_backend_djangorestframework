@@ -246,6 +246,42 @@ class ProductSerializerMixin:
         if first_image and first_image.image:
             return self._build_absolute_uri(first_image.image.url)
         return None
+    
+    @staticmethod
+    def _calculate_rating_avg(obj: Product) -> float:
+        """Calculate average rating from approved reviews"""
+        from django.db.models import Avg
+        from orders.models import Review
+        
+        avg_rating = Review.objects.filter(
+            product=obj,
+            is_approved=True
+        ).aggregate(avg=Avg('rating'))['avg']
+        
+        return float(avg_rating or 0.0)
+    
+    @staticmethod
+    def _calculate_rating_count(obj: Product) -> int:
+        """Count approved reviews"""
+        from orders.models import Review
+        
+        return Review.objects.filter(
+            product=obj,
+            is_approved=True
+        ).count()
+    
+    @staticmethod
+    def _calculate_sold_count(obj: Product) -> int:
+        """Calculate total quantity sold from delivered orders"""
+        from django.db.models import Sum
+        from orders.models import OrderItem
+        
+        total_sold = OrderItem.objects.filter(
+            sku__product=obj,
+            order__status='delivered'
+        ).aggregate(total=Sum('quantity'))['total']
+        
+        return int(total_sold or 0)
 
     def _product_summary(self, obj: Product) -> Dict[str, Optional[str]]:
         payload = {
@@ -264,9 +300,9 @@ class ProductSerializerMixin:
             "subcategory": SubcategorySummarySerializer(obj.subcategory).data if obj.subcategory else None,
             "available_sizes": self._available_sizes(obj),
             "available_colors": self._available_colors(obj),
-            "rating_avg": float(obj.rating or 0.0),
-            "rating_count": obj.reviews_count,
-            "sold_count": obj.sales_count,
+            "rating_avg": self._calculate_rating_avg(obj),
+            "rating_count": self._calculate_rating_count(obj),
+            "sold_count": self._calculate_sold_count(obj),
             "in_stock": obj.in_stock,
             "description": obj.description,
         }
@@ -307,8 +343,8 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     original_price_max = serializers.SerializerMethodField()
     discount = serializers.IntegerField()
     rating_avg = serializers.SerializerMethodField()
-    rating_count = serializers.IntegerField(source="reviews_count")
-    sold_count = serializers.IntegerField(source="sales_count")
+    rating_count = serializers.SerializerMethodField()
+    sold_count = serializers.SerializerMethodField()
     available_sizes = serializers.SerializerMethodField()
     available_colors = serializers.SerializerMethodField()
     category = CategorySummarySerializer(read_only=True)
@@ -376,9 +412,38 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     def get_original_price_max(self, obj: Product) -> Optional[float]:
         return self._price_payload(obj)["original_price_max"]
 
-    @staticmethod
-    def get_rating_avg(obj: Product) -> float:
-        return float(obj.rating or 0.0)
+    def get_rating_avg(self, obj: Product) -> float:
+        """Calculate average rating from approved reviews"""
+        from django.db.models import Avg
+        from orders.models import Review
+        
+        avg_rating = Review.objects.filter(
+            product=obj,
+            is_approved=True
+        ).aggregate(avg=Avg('rating'))['avg']
+        
+        return float(avg_rating or 0.0)
+    
+    def get_rating_count(self, obj: Product) -> int:
+        """Count approved reviews"""
+        from orders.models import Review
+        
+        return Review.objects.filter(
+            product=obj,
+            is_approved=True
+        ).count()
+    
+    def get_sold_count(self, obj: Product) -> int:
+        """Calculate total quantity sold from delivered orders"""
+        from django.db.models import Sum
+        from orders.models import OrderItem
+        
+        total_sold = OrderItem.objects.filter(
+            sku__product=obj,
+            order__status='delivered'
+        ).aggregate(total=Sum('quantity'))['total']
+        
+        return int(total_sold or 0)
 
     def get_available_sizes(self, obj: Product) -> List[str]:
         return self._available_sizes(obj)
