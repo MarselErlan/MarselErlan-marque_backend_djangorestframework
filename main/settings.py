@@ -15,6 +15,7 @@ import os
 import sys
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers
 
 # Load environment variables from .env file
 load_dotenv()
@@ -215,6 +216,12 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'https://marque.website',
     'https://marquebwithd-production.up.railway.app',
+]
+
+# Allow custom headers for market filtering
+# Extend default CORS headers with our custom x-market header
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-market',  # Custom header for market filtering
 ]
 
 CSRF_TRUSTED_ORIGINS = [
