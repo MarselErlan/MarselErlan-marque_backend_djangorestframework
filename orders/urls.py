@@ -9,5 +9,6 @@ app_name = 'orders'
 
 urlpatterns = [
     re_path(r'^create/?$', views.create_order, name='create'),
+    re_path(r'^review/create/?$', views.create_review, name='create_review'),
 ]
 

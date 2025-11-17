@@ -10,10 +10,10 @@ from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
 
-from .models import Order, OrderItem
-from .serializers import OrderCreateSerializer, OrderSerializer
+from .models import Order, OrderItem, Review, ReviewImage
+from .serializers import OrderCreateSerializer, OrderSerializer, ReviewCreateSerializer, ReviewSerializer
 from users.models import Address, PaymentMethod
-from products.models import Cart, CartItem, SKU
+from products.models import Cart, CartItem, SKU, Product
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 
@@ -169,3 +169,132 @@ def create_order(request):
     order_serializer = OrderSerializer(order, context={'request': request})
     
     return Response(order_serializer.data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    summary="Create a review for an order product",
+    description="Create a review with images for a product from an order. Images are required.",
+    request={
+        'multipart/form-data': {
+            'type': 'object',
+            'properties': {
+                'order_id': {'type': 'integer'},
+                'product_id': {'type': 'integer'},
+                'rating': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+                'comment': {'type': 'string'},
+                'title': {'type': 'string', 'required': False},
+                'images': {'type': 'array', 'items': {'type': 'string', 'format': 'binary'}},
+            },
+            'required': ['order_id', 'product_id', 'rating', 'comment', 'images'],
+        }
+    },
+    responses={
+        201: ReviewSerializer,
+        400: OpenApiResponse(description="Validation error"),
+        404: OpenApiResponse(description="Order or product not found"),
+    },
+    tags=["orders"],
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def create_review(request):
+    """
+    Create a review for a product from an order.
+    
+    Accepts multipart/form-data with:
+    - order_id: ID of the order
+    - product_id: ID of the product being reviewed
+    - rating: Rating from 1 to 5 (required)
+    - comment: Review text (required)
+    - title: Review title (optional)
+    - images: One or more image files (required)
+    """
+    # Handle multipart form data
+    data = request.data.copy()
+    
+    # Extract images from request.FILES
+    # Handle both single file and multiple files
+    # Frontend can send multiple files with the same name "images" or "images[]"
+    images = []
+    if 'images' in request.FILES:
+        images = request.FILES.getlist('images')
+    elif 'images[]' in request.FILES:
+        images = request.FILES.getlist('images[]')
+    elif 'image' in request.FILES:
+        # Fallback for single image field name
+        images = [request.FILES['image']]
+    
+    if not images:
+        return Response(
+            {'error': 'At least one image is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate image files
+    for image in images:
+        if not image.content_type.startswith('image/'):
+            return Response(
+                {'error': f'Invalid file type: {image.name}. Only image files are allowed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    serializer = ReviewCreateSerializer(data=data, context={'request': request})
+    
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    user = request.user
+    validated_data = serializer.validated_data
+    
+    # Get order and product
+    try:
+        order = Order.objects.get(id=validated_data['order_id'], user=user)
+        product = Product.objects.get(id=validated_data['product_id'])
+    except Order.DoesNotExist:
+        return Response(
+            {'error': 'Order not found or doesn\'t belong to user'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Product.DoesNotExist:
+        return Response(
+            {'error': 'Product not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Check if review already exists for this user, product, and order
+    existing_review = Review.objects.filter(
+        user=user,
+        product=product,
+        order=order
+    ).first()
+    
+    if existing_review:
+        return Response(
+            {'error': 'You have already reviewed this product for this order'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Create review
+    review = Review.objects.create(
+        user=user,
+        product=product,
+        order=order,
+        rating=validated_data['rating'],
+        comment=validated_data['comment'],
+        title=validated_data.get('title', ''),
+        is_verified_purchase=True,  # Always true if linked to an order
+        is_approved=False,  # Requires admin approval
+    )
+    
+    # Create review images
+    for image_file in images:
+        ReviewImage.objects.create(
+            review=review,
+            image=image_file
+        )
+    
+    # Serialize and return review
+    review_serializer = ReviewSerializer(review, context={'request': request})
+    
+    return Response(review_serializer.data, status=status.HTTP_201_CREATED)
