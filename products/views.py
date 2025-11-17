@@ -1115,11 +1115,38 @@ class ProductListView(MarketAwareAPIView):
 class ProductBestSellerView(ProductListView):
     """
     GET /api/v1/products/best-sellers
+    Returns products sorted by actual sales (sold_count) from delivered orders.
     """
 
     def get_queryset(self, request):
+        from django.db.models import Sum, Q, IntegerField, Coalesce
+        
         queryset = super().get_queryset(request)
-        return queryset.filter(is_best_seller=True).order_by("-sales_count", "-rating")
+        
+        # Annotate with actual sold count from OrderItems
+        # OrderItem -> SKU -> Product relationship
+        # Note: OrderItem has ForeignKey to SKU, so we use the reverse relation
+        from orders.models import OrderItem
+        queryset = queryset.annotate(
+            actual_sold_count=Coalesce(
+                Sum(
+                    'skus__orderitem__quantity',
+                    filter=Q(skus__orderitem__order__status='delivered'),
+                    output_field=IntegerField()
+                ),
+                0,
+                output_field=IntegerField()
+            )
+        )
+        
+        # Order by actual sold count (products with sales first), then by rating
+        queryset = queryset.order_by(
+            '-actual_sold_count',
+            '-rating',
+            '-created_at'
+        )
+        
+        return queryset
 
     @extend_schema(
         summary="List best-seller products",
