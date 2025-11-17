@@ -1119,34 +1119,15 @@ class ProductBestSellerView(ProductListView):
     """
 
     def get_queryset(self, request):
-        from django.db.models import Sum, Q, IntegerField, Value
-        from django.db.models.functions import Coalesce
-        
-        # Get base queryset with market filtering already applied by parent
+        # Get base queryset - this already applies market filtering and returns products
+        # We'll use the serializer's sold_count calculation instead of annotation
+        # to avoid complex query issues
         queryset = super().get_queryset(request)
         
-        # Ensure market filtering is applied (in case parent didn't apply it)
-        market = self.resolve_market(request)
-        queryset = self.apply_market_filter(queryset, market)
-        
-        # Annotate with actual sold count from OrderItems
-        # OrderItem -> SKU -> Product relationship
-        # Note: OrderItem has ForeignKey to SKU, so we use the reverse relation
-        queryset = queryset.annotate(
-            actual_sold_count=Coalesce(
-                Sum(
-                    'skus__orderitem__quantity',
-                    filter=Q(skus__orderitem__order__status='delivered'),
-                    output_field=IntegerField()
-                ),
-                Value(0),
-                output_field=IntegerField()
-            )
-        )
-        
-        # Order by actual sold count (products with sales first), then by rating
+        # Order by sales_count (from model), rating, and created_at
+        # The serializer will calculate actual sold_count dynamically
         queryset = queryset.order_by(
-            '-actual_sold_count',
+            '-sales_count',
             '-rating',
             '-created_at'
         )
