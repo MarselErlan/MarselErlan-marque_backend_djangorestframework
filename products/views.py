@@ -1119,14 +1119,14 @@ class ProductBestSellerView(ProductListView):
     """
 
     def get_queryset(self, request):
-        from django.db.models import Sum, Q, IntegerField, Coalesce
+        from django.db.models import Sum, Q, IntegerField, Value
+        from django.db.models.functions import Coalesce
         
         queryset = super().get_queryset(request)
         
         # Annotate with actual sold count from OrderItems
         # OrderItem -> SKU -> Product relationship
         # Note: OrderItem has ForeignKey to SKU, so we use the reverse relation
-        from orders.models import OrderItem
         queryset = queryset.annotate(
             actual_sold_count=Coalesce(
                 Sum(
@@ -1134,7 +1134,7 @@ class ProductBestSellerView(ProductListView):
                     filter=Q(skus__orderitem__order__status='delivered'),
                     output_field=IntegerField()
                 ),
-                0,
+                Value(0),
                 output_field=IntegerField()
             )
         )
