@@ -391,7 +391,9 @@ class ReviewSerializer(serializers.ModelSerializer):
     """Approved reviews for a product."""
 
     user_name = serializers.SerializerMethodField()
+    user_profile_image = serializers.SerializerMethodField()
     text = serializers.CharField(source="comment")
+    images = serializers.SerializerMethodField()
 
     class Meta:
         model = Review
@@ -403,6 +405,8 @@ class ReviewSerializer(serializers.ModelSerializer):
             "is_verified_purchase",
             "created_at",
             "user_name",
+            "user_profile_image",
+            "images",
         )
 
     @staticmethod
@@ -412,6 +416,37 @@ class ReviewSerializer(serializers.ModelSerializer):
         if obj.user and obj.user.phone:
             return obj.user.phone
         return "Покупатель"
+    
+    def get_user_profile_image(self, obj: Review) -> Optional[str]:
+        """Return user profile image URL if available"""
+        if obj.user and obj.user.profile_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.user.profile_image.url)
+            return obj.user.profile_image.url
+        return None
+    
+    def get_images(self, obj: Review) -> list:
+        """Return review images with URLs"""
+        images = obj.images.all() if hasattr(obj, 'images') else []
+        request = self.context.get('request')
+        result = []
+        for img in images:
+            image_data = {
+                'id': img.id,
+                'created_at': img.created_at.isoformat() if img.created_at else None,
+            }
+            if img.image:
+                if request:
+                    image_data['url'] = request.build_absolute_uri(img.image.url)
+                else:
+                    image_data['url'] = img.image.url
+            elif img.image_url:
+                image_data['url'] = img.image_url
+            else:
+                continue
+            result.append(image_data)
+        return result
 
 
 class ProductDetailSerializer(ProductListSerializer):
@@ -480,8 +515,15 @@ class ProductDetailSerializer(ProductListSerializer):
         return attributes
 
     def get_reviews(self, obj: Product) -> List[OrderedDict]:
-        queryset = obj.reviews.filter(is_approved=True).select_related("user")
-        serializer = ReviewSerializer(queryset, many=True)
+        from orders.models import ReviewImage
+        queryset = (
+            obj.reviews
+            .filter(is_approved=True)
+            .select_related("user")
+            .prefetch_related("images")
+        )
+        request = self.context.get("request")
+        serializer = ReviewSerializer(queryset, many=True, context={"request": request} if request else {})
         return serializer.data
 
     def get_similar_products(self, obj: Product) -> List[OrderedDict]:
