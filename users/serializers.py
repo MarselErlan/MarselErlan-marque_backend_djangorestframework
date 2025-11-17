@@ -255,16 +255,30 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 class OrderItemSerializer(serializers.ModelSerializer):
     """Serializer for order item snapshots"""
+    
+    product_id = serializers.SerializerMethodField()
+    size = serializers.CharField(read_only=True)
+    color = serializers.CharField(read_only=True)
 
     class Meta:
         model = OrderItem
         fields = [
+            'id',
+            'product_id',
             'product_name',
             'quantity',
             'price',
             'subtotal',
             'image_url',
+            'size',
+            'color',
         ]
+    
+    def get_product_id(self, obj):
+        """Get product_id from SKU if available"""
+        if obj.sku and obj.sku.product:
+            return obj.sku.product.id
+        return None
 
 
 class OrderListSerializer(serializers.ModelSerializer):

@@ -808,7 +808,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             Order.objects
             .filter(user=self.request.user)
             .select_related('shipping_address', 'payment_method_used')
-            .prefetch_related('items')
+            .prefetch_related('items__sku__product')
             .order_by('-order_date')
         )
 
