@@ -223,6 +223,9 @@ class Address(models.Model):
     street = models.CharField(max_length=255, null=True, blank=True)
     building = models.CharField(max_length=50, null=True, blank=True)
     apartment = models.CharField(max_length=50, null=True, blank=True)
+    entrance = models.CharField(max_length=20, null=True, blank=True)  # Подъезд (for KG addresses)
+    floor = models.CharField(max_length=20, null=True, blank=True)  # Этаж (for KG addresses)
+    comment = models.TextField(null=True, blank=True, max_length=200)  # Комментарий к заказу
     city = models.CharField(max_length=100, null=True, blank=True)
     state = models.CharField(max_length=100, null=True, blank=True)  # For US addresses
     postal_code = models.CharField(max_length=20, null=True, blank=True)

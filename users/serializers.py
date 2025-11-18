@@ -61,7 +61,7 @@ class AddressSerializer(serializers.ModelSerializer):
         model = Address
         fields = [
             'id', 'user', 'title', 'full_address', 'street', 'building',
-            'apartment', 'city', 'state', 'postal_code', 'country',
+            'apartment', 'entrance', 'floor', 'comment', 'city', 'state', 'postal_code', 'country',
             'is_default', 'market', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'market', 'country', 'created_at', 'updated_at']
@@ -103,7 +103,7 @@ class AddressCreateSerializer(serializers.ModelSerializer):
         model = Address
         fields = [
             'title', 'full_address', 'street', 'building', 'apartment',
-            'city', 'state', 'postal_code', 'country', 'is_default'
+            'entrance', 'floor', 'comment', 'city', 'state', 'postal_code', 'country', 'is_default'
         ]
         read_only_fields = ['country']
     
