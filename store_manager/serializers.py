@@ -30,7 +30,7 @@ class ManagerOrderListSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_number', 'status', 'customer_name', 'customer_phone',
-            'delivery_address', 'delivery_city', 'total_amount', 'currency',
+            'delivery_address', 'delivery_city', 'delivery_notes', 'total_amount', 'currency',
             'order_date', 'requested_delivery_date', 'items_count', 'items'
         ]
         read_only_fields = ['id', 'order_number', 'order_date']
