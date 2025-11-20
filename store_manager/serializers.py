@@ -6,6 +6,7 @@ from rest_framework import serializers
 from orders.models import Order, OrderItem
 from .models import StoreManager, ManagerSettings, RevenueSnapshot, ManagerActivityLog, ManagerNotification
 from users.models import User
+from users.serializers import AddressSerializer
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -41,6 +42,7 @@ class ManagerOrderDetailSerializer(serializers.ModelSerializer):
     
     items = OrderItemSerializer(many=True, read_only=True)
     items_count = serializers.IntegerField(read_only=True)
+    shipping_address = AddressSerializer(read_only=True)
     
     class Meta:
         model = Order
@@ -48,7 +50,7 @@ class ManagerOrderDetailSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'status', 'customer_name', 'customer_phone',
             'customer_email', 'delivery_address', 'delivery_city', 'delivery_state',
             'delivery_postal_code', 'delivery_country', 'delivery_notes',
-            'requested_delivery_date',
+            'requested_delivery_date', 'shipping_address',
             'payment_method', 'payment_status', 'card_type', 'card_last_four',
             'subtotal', 'shipping_cost', 'tax', 'total_amount', 'currency', 'currency_code',
             'order_date', 'confirmed_date', 'shipped_date', 'delivered_date',
