@@ -569,6 +569,52 @@ class ProductDetailSerializer(ProductListSerializer):
                 key, value = text.split(":", 1)
                 attributes[key.strip()] = value.strip()
 
+        # Add material_tags as Состав (Composition) if not already present
+        if obj.material_tags and isinstance(obj.material_tags, list) and len(obj.material_tags) > 0:
+            if "Состав" not in attributes and "состав" not in attributes and "Material" not in attributes and "material" not in attributes:
+                # Join materials with comma and space, capitalize first letter
+                materials = ", ".join(str(m).capitalize() for m in obj.material_tags if m)
+                if materials:
+                    attributes["Состав"] = materials
+
+        # Add season_tags as Сезон (Season) if not already present
+        if obj.season_tags and isinstance(obj.season_tags, list) and len(obj.season_tags) > 0:
+            if "Сезон" not in attributes and "сезон" not in attributes and "Season" not in attributes and "season" not in attributes:
+                # Join seasons with comma, capitalize and translate
+                season_map = {
+                    'summer': 'Лето',
+                    'winter': 'Зима',
+                    'spring': 'Весна',
+                    'fall': 'Осень',
+                    'autumn': 'Осень',
+                    'all-season': 'Мульти',
+                    'all_season': 'Мульти'
+                }
+                seasons = []
+                for s in obj.season_tags:
+                    season_str = str(s).lower()
+                    translated = season_map.get(season_str, season_str.capitalize())
+                    seasons.append(translated)
+                if seasons:
+                    attributes["Сезон"] = ", ".join(seasons) if len(seasons) > 1 else seasons[0]
+
+        # Add SKU code as Артикул (Article) if not already present
+        if "Артикул" not in attributes and "артикул" not in attributes and "Article" not in attributes and "article" not in attributes:
+            # Try to get SKU from prefetched objects or query
+            skus = None
+            if hasattr(obj, "_prefetched_objects_cache") and "skus" in obj._prefetched_objects_cache:
+                skus = obj._prefetched_objects_cache["skus"]
+            elif hasattr(obj, "skus"):
+                skus = obj.skus.filter(is_active=True) if hasattr(obj.skus, 'filter') else obj.skus.all()
+            
+            if skus:
+                # Handle both queryset and list
+                sku_list = list(skus) if hasattr(skus, '__iter__') else []
+                if sku_list and len(sku_list) > 0:
+                    first_sku = sku_list[0]
+                    if hasattr(first_sku, 'sku_code') and first_sku.sku_code:
+                        attributes["Артикул"] = first_sku.sku_code
+
         # Ensure some core attributes are always present
         if obj.brand and "Бренд" not in attributes:
             attributes["Бренд"] = obj.brand
