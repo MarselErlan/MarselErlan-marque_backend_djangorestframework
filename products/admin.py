@@ -88,8 +88,14 @@ class ProductAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('name', 'slug', 'brand', 'description', 'market', 'gender')
         }),
+        ('Product Attributes (Shown on Frontend)', {
+            'fields': ('material_tags', 'season_tags'),
+            'description': 'These fields appear in the "О товаре" section on the product page. '
+                          'Enter as JSON array: ["cotton", "polyester"] for materials or ["all-season", "summer"] for seasons. '
+                          'SKU code (Артикул) is automatically taken from the first SKU.'
+        }),
         ('AI-Enhanced Information', {
-            'fields': ('ai_description', 'style_tags', 'occasion_tags', 'season_tags', 'color_tags', 'material_tags', 'age_group_tags', 'activity_tags'),
+            'fields': ('ai_description', 'style_tags', 'occasion_tags', 'color_tags', 'age_group_tags', 'activity_tags'),
             'classes': ('collapse',),
             'description': 'These fields help AI understand and recommend products better'
         }),
