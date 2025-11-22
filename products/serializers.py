@@ -670,9 +670,9 @@ class CartItemSerializer(ProductSerializerMixin, serializers.ModelSerializer):
     original_price = serializers.SerializerMethodField()
     brand = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
-    sku_id = serializers.IntegerField(source="sku.id", read_only=True)
-    size = serializers.CharField(source="sku.size", read_only=True)
-    color = serializers.CharField(source="sku.color", read_only=True)
+    sku_id = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
+    color = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
@@ -691,36 +691,74 @@ class CartItemSerializer(ProductSerializerMixin, serializers.ModelSerializer):
         )
 
     def get_product_id(self, obj: CartItem) -> Optional[int]:
-        return obj.sku.product_id if obj.sku else None
+        try:
+            return obj.sku.product_id if obj.sku else None
+        except AttributeError:
+            return None
 
     def get_name(self, obj: CartItem) -> str:
-        return obj.sku.product.name if obj.sku and obj.sku.product else ""
+        try:
+            if obj.sku and obj.sku.product:
+                return obj.sku.product.name or ""
+            return ""
+        except AttributeError:
+            return ""
 
     def get_price(self, obj: CartItem) -> Optional[float]:
-        if obj.sku and obj.sku.price is not None:
-            return float(obj.sku.price)
-        if obj.sku and obj.sku.product and obj.sku.product.price is not None:
-            return float(obj.sku.product.price)
-        return None
+        try:
+            if obj.sku and obj.sku.price is not None:
+                return float(obj.sku.price)
+            if obj.sku and obj.sku.product and obj.sku.product.price is not None:
+                return float(obj.sku.product.price)
+            return None
+        except (AttributeError, TypeError, ValueError):
+            return None
 
     def get_original_price(self, obj: CartItem) -> Optional[float]:
-        if obj.sku and obj.sku.original_price is not None:
-            return float(obj.sku.original_price)
-        if obj.sku and obj.sku.product and obj.sku.product.original_price is not None:
-            return float(obj.sku.product.original_price)
-        return None
+        try:
+            if obj.sku and obj.sku.original_price is not None:
+                return float(obj.sku.original_price)
+            if obj.sku and obj.sku.product and obj.sku.product.original_price is not None:
+                return float(obj.sku.product.original_price)
+            return None
+        except (AttributeError, TypeError, ValueError):
+            return None
 
     def get_brand(self, obj: CartItem) -> Optional[str]:
-        if obj.sku and obj.sku.product:
-            return obj.sku.product.brand
-        return None
+        try:
+            if obj.sku and obj.sku.product:
+                return obj.sku.product.brand
+            return None
+        except AttributeError:
+            return None
 
     def get_image(self, obj: CartItem) -> Optional[str]:
-        if obj.sku and obj.sku.variant_image:
-            return self._build_absolute_uri(obj.sku.variant_image.url)
-        if obj.sku and obj.sku.product:
-            return self._primary_image(obj.sku.product)
-        return None
+        try:
+            if obj.sku and obj.sku.variant_image:
+                return self._build_absolute_uri(obj.sku.variant_image.url)
+            if obj.sku and obj.sku.product:
+                return self._primary_image(obj.sku.product)
+            return None
+        except (AttributeError, Exception):
+            return None
+
+    def get_sku_id(self, obj: CartItem) -> Optional[int]:
+        try:
+            return obj.sku.id if obj.sku else None
+        except AttributeError:
+            return None
+
+    def get_size(self, obj: CartItem) -> Optional[str]:
+        try:
+            return obj.sku.size if obj.sku else None
+        except AttributeError:
+            return None
+
+    def get_color(self, obj: CartItem) -> Optional[str]:
+        try:
+            return obj.sku.color if obj.sku else None
+        except AttributeError:
+            return None
 
 
 class CartSerializer(serializers.ModelSerializer):

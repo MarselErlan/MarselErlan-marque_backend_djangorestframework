@@ -868,11 +868,24 @@ class CartUpdateView(CartBaseView):
 
         cart = self.get_cart(user)
         try:
-            cart_item = cart.items.select_for_update().get(id=cart_item_id)
+            cart_item = cart.items.select_for_update().select_related('sku', 'sku__product').get(id=cart_item_id)
         except CartItem.DoesNotExist:
             return Response(
                 {"detail": "Cart item not found."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Validate that the SKU still exists and is active
+        if not cart_item.sku:
+            return Response(
+                {"detail": "Cart item's SKU no longer exists."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if not cart_item.sku.is_active:
+            return Response(
+                {"detail": "Cart item's SKU is no longer available."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         with transaction.atomic():
@@ -882,7 +895,17 @@ class CartUpdateView(CartBaseView):
                 cart_item.quantity = quantity
                 cart_item.save()
 
-        return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+        try:
+            return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error serializing cart after update: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": f"Error serializing cart: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class CartRemoveView(CartBaseView):
