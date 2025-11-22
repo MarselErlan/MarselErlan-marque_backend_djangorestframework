@@ -734,12 +734,24 @@ class CartItemSerializer(ProductSerializerMixin, serializers.ModelSerializer):
 
     def get_image(self, obj: CartItem) -> Optional[str]:
         try:
-            if obj.sku and obj.sku.variant_image:
-                return self._build_absolute_uri(obj.sku.variant_image.url)
-            if obj.sku and obj.sku.product:
-                return self._primary_image(obj.sku.product)
+            if obj.sku:
+                # Check if variant_image exists and has a url attribute
+                if hasattr(obj.sku, 'variant_image') and obj.sku.variant_image:
+                    try:
+                        image_url = obj.sku.variant_image.url
+                        if image_url:
+                            return self._build_absolute_uri(image_url)
+                    except (AttributeError, ValueError):
+                        pass
+                # Fall back to product image
+                if obj.sku.product:
+                    return self._primary_image(obj.sku.product)
             return None
-        except (AttributeError, Exception):
+        except (AttributeError, Exception) as e:
+            # Log the error for debugging but return None gracefully
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error getting cart item image: {str(e)}")
             return None
 
     def get_sku_id(self, obj: CartItem) -> Optional[int]:

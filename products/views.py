@@ -9,6 +9,7 @@ from io import BytesIO
 from typing import Optional, Tuple
 from uuid import uuid4
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -764,8 +765,22 @@ class CartBaseView(BaseUserLookupMixin, APIView):
         return cart
 
     def serialize_cart(self, cart, request):
-        serializer = CartSerializer(cart, context={"request": request})
-        return serializer.data
+        try:
+            # Ensure cart items are properly prefetched
+            if not hasattr(cart, '_prefetched_objects_cache') or 'items' not in getattr(cart, '_prefetched_objects_cache', {}):
+                # Reload cart with proper prefetching if not already done
+                cart = Cart.objects.prefetch_related(
+                    'items__sku',
+                    'items__sku__product',
+                    'items__sku__product__images'
+                ).get(id=cart.id)
+            serializer = CartSerializer(cart, context={"request": request})
+            return serializer.data
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in serialize_cart: {str(e)}", exc_info=True)
+            raise
 
 
 class CartGetView(CartBaseView):
@@ -867,8 +882,10 @@ class CartUpdateView(CartBaseView):
             )
 
         cart = self.get_cart(user)
+        
+        # First check if cart item exists (without select_for_update, outside transaction)
         try:
-            cart_item = cart.items.select_for_update().select_related('sku', 'sku__product').get(id=cart_item_id)
+            cart_item = cart.items.select_related('sku', 'sku__product').get(id=cart_item_id)
         except CartItem.DoesNotExist:
             return Response(
                 {"detail": "Cart item not found."},
@@ -888,12 +905,30 @@ class CartUpdateView(CartBaseView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Now use select_for_update inside the transaction
         with transaction.atomic():
+            # Re-fetch with select_for_update inside transaction
+            cart_item = cart.items.select_for_update().select_related('sku', 'sku__product').get(id=cart_item_id)
+            
             if quantity <= 0:
                 cart_item.delete()
             else:
                 cart_item.quantity = quantity
                 cart_item.save()
+
+        # Refresh cart from database to ensure we have latest data
+        try:
+            cart.refresh_from_db()
+            # Also refresh related items
+            cart = Cart.objects.select_related('user').prefetch_related(
+                'items__sku',
+                'items__sku__product',
+                'items__sku__product__images'
+            ).get(id=cart.id)
+        except Exception as refresh_error:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Could not refresh cart: {str(refresh_error)}")
 
         try:
             return Response(self.serialize_cart(cart, request), status=status.HTTP_200_OK)
@@ -902,8 +937,12 @@ class CartUpdateView(CartBaseView):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error serializing cart after update: {str(e)}", exc_info=True)
+            # Return a simpler response if serialization fails
             return Response(
-                {"detail": f"Error serializing cart: {str(e)}"},
+                {
+                    "detail": "Cart updated successfully but error serializing response",
+                    "error": str(e) if settings.DEBUG else "Internal server error"
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
