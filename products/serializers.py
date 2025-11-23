@@ -16,6 +16,7 @@ from .models import (
     Cart,
     CartItem,
     Category,
+    Currency,
     Product,
     ProductFeature,
     ProductImage,
@@ -24,6 +25,14 @@ from .models import (
     Wishlist,
     WishlistItem,
 )
+
+
+class CurrencySerializer(serializers.ModelSerializer):
+    """Serializer for currency information."""
+    
+    class Meta:
+        model = Currency
+        fields = ("id", "code", "name", "symbol", "exchange_rate", "is_base", "market")
 
 
 class CategorySummarySerializer(serializers.ModelSerializer):
@@ -130,6 +139,7 @@ class SKUSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     original_price = serializers.SerializerMethodField()
     variant_image = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = SKU
@@ -143,10 +153,17 @@ class SKUSerializer(serializers.ModelSerializer):
             "color_hex",
             "price",
             "original_price",
+            "currency",
             "stock",
             "variant_image",
             "is_active",
         )
+    
+    def get_currency(self, obj: SKU):
+        currency = obj.get_currency()
+        if currency:
+            return CurrencySerializer(currency).data
+        return None
 
     @staticmethod
     def _decimal_to_float(value):
@@ -349,6 +366,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     available_colors = serializers.SerializerMethodField()
     category = CategorySummarySerializer(read_only=True)
     subcategory = SubcategorySummarySerializer(read_only=True)
+    currency = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -377,7 +395,14 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
             "market",
             "is_featured",
             "is_best_seller",
+            "currency",
         )
+    
+    def get_currency(self, obj: Product):
+        currency = obj.get_currency()
+        if currency:
+            return CurrencySerializer(currency).data
+        return None
 
     def get_brand(self, obj: Product) -> Dict[str, Optional[str]]:
         return self._brand_payload(obj)

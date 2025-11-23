@@ -1,7 +1,32 @@
 from django.contrib import admin
 from .models import (Category, Subcategory, Product, ProductImage, 
                      ProductFeature, ProductSizeOption, ProductColorOption, SKU,
-                     Cart, CartItem, Wishlist, WishlistItem)
+                     Cart, CartItem, Wishlist, WishlistItem, Currency)
+
+
+@admin.register(Currency)
+class CurrencyAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'symbol', 'exchange_rate', 'is_base', 'market', 'is_active', 'updated_at')
+    list_filter = ('is_active', 'is_base', 'market', 'market')
+    search_fields = ('code', 'name', 'symbol')
+    ordering = ('code',)
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('code', 'name', 'symbol', 'market')
+        }),
+        ('Exchange Rate', {
+            'fields': ('exchange_rate', 'is_base'),
+            'description': 'Exchange rate relative to base currency (USD). Base currency must have rate = 1.0'
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(Category)
@@ -59,7 +84,7 @@ class ProductColorOptionInline(admin.TabularInline):
 class SKUInline(admin.TabularInline):
     model = SKU
     extra = 1
-    fields = ('sku_code', 'size_option', 'color_option', 'price', 'original_price', 'stock', 'variant_image', 'is_active')
+    fields = ('sku_code', 'size_option', 'color_option', 'price', 'original_price', 'currency', 'stock', 'variant_image', 'is_active')
     readonly_fields = ('sku_code',)
 
     def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
@@ -103,7 +128,7 @@ class ProductAdmin(admin.ModelAdmin):
             'fields': ('category', 'subcategory')
         }),
         ('Pricing', {
-            'fields': ('price', 'original_price', 'discount')
+            'fields': ('price', 'original_price', 'discount', 'currency')
         }),
         ('Images', {
             'fields': ('image',)
@@ -126,11 +151,29 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(SKU)
 class SKUAdmin(admin.ModelAdmin):
-    list_display = ('sku_code', 'product', 'size_option', 'color_option', 'price', 'stock', 'is_active')
-    list_filter = ('is_active', 'size_option__name', 'color_option__name', 'created_at')
+    list_display = ('sku_code', 'product', 'size_option', 'color_option', 'price', 'currency', 'stock', 'is_active')
+    list_filter = ('is_active', 'currency', 'size_option__name', 'color_option__name', 'created_at')
     search_fields = ('sku_code', 'product__name', 'product__brand')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('product', 'sku_code')
+        }),
+        ('Variant Attributes', {
+            'fields': ('size_option', 'color_option')
+        }),
+        ('Pricing', {
+            'fields': ('price', 'original_price', 'currency')
+        }),
+        ('Stock & Status', {
+            'fields': ('stock', 'variant_image', 'is_active')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(ProductSizeOption)

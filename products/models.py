@@ -6,6 +6,58 @@ from django.core.exceptions import ValidationError
 from users.models import User
 
 
+class Currency(models.Model):
+    """Currency model for multi-currency support"""
+    
+    code = models.CharField(max_length=3, unique=True, help_text="ISO 4217 currency code (e.g., USD, KGS, EUR)")
+    name = models.CharField(max_length=100, help_text="Currency name (e.g., US Dollar, Kyrgyzstani Som)")
+    symbol = models.CharField(max_length=10, help_text="Currency symbol (e.g., $, сом, €)")
+    exchange_rate = models.DecimalField(
+        max_digits=12, 
+        decimal_places=6, 
+        default=1.0,
+        help_text="Exchange rate relative to base currency (USD). 1 USD = exchange_rate of this currency"
+    )
+    is_base = models.BooleanField(default=False, help_text="Is this the base currency?")
+    is_active = models.BooleanField(default=True)
+    market = models.CharField(
+        max_length=3,
+        choices=[
+            ('KG', 'Kyrgyzstan'),
+            ('US', 'United States'),
+            ('ALL', 'All Markets'),
+        ],
+        default='ALL',
+        help_text="Primary market for this currency"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'currencies'
+        verbose_name = 'Currency'
+        verbose_name_plural = 'Currencies'
+        ordering = ['code']
+        indexes = [
+            models.Index(fields=['code', 'is_active']),
+            models.Index(fields=['market', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.code} ({self.symbol}) - {self.name}"
+    
+    def clean(self):
+        if self.is_base and self.exchange_rate != 1.0:
+            raise ValidationError("Base currency must have exchange_rate = 1.0")
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        # Ensure only one base currency exists
+        if self.is_base:
+            Currency.objects.filter(is_base=True).exclude(pk=self.pk).update(is_base=False)
+        super().save(*args, **kwargs)
+
+
 class Category(models.Model):
     """Product categories"""
     
@@ -111,6 +163,14 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     discount = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])  # Percentage
+    currency = models.ForeignKey(
+        Currency,
+        on_delete=models.PROTECT,
+        related_name='products',
+        null=True,
+        blank=True,
+        help_text="Currency for this product's price. If not set, uses market default."
+    )
     
     # Images
     image = models.ImageField(upload_to='products/main/', null=True, blank=True)  # Main image
@@ -219,6 +279,22 @@ class Product(models.Model):
     
     def __str__(self):
         return f"{self.brand} - {self.name}"
+    
+    def get_currency(self):
+        """Get currency for this product, falling back to market default"""
+        if self.currency:
+            return self.currency
+        # Get default currency for market
+        try:
+            if self.market == 'US':
+                return Currency.objects.filter(code='USD', is_active=True).first()
+            elif self.market == 'KG':
+                return Currency.objects.filter(code='KGS', is_active=True).first()
+            else:
+                # For ALL market, try to get base currency
+                return Currency.objects.filter(is_base=True, is_active=True).first()
+        except Currency.DoesNotExist:
+            return None
     
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -468,6 +544,14 @@ class SKU(models.Model):
     # Pricing (can override product price)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    currency = models.ForeignKey(
+        Currency,
+        on_delete=models.PROTECT,
+        related_name='skus',
+        null=True,
+        blank=True,
+        help_text="Currency for this SKU's price. If not set, uses product currency."
+    )
     
     # Stock
     stock = models.IntegerField(default=0, validators=[MinValueValidator(0)])
@@ -495,6 +579,12 @@ class SKU(models.Model):
     
     def __str__(self):
         return f"{self.product.name} - {self.size} / {self.color}"
+    
+    def get_currency(self):
+        """Get currency for this SKU, falling back to product currency"""
+        if self.currency:
+            return self.currency
+        return self.product.get_currency()
     
     def clean(self):
         errors = {}
