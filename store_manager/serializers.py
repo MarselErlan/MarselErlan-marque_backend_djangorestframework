@@ -76,6 +76,7 @@ class DashboardStatsSerializer(serializers.Serializer):
     today_orders_count = serializers.IntegerField()
     all_orders_count = serializers.IntegerField()
     active_orders_count = serializers.IntegerField()
+    total_users_count = serializers.IntegerField()
     market = serializers.CharField()
 
 

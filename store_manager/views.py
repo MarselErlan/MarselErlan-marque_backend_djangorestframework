@@ -217,7 +217,7 @@ def check_manager_status(request):
 
 @extend_schema(
     summary="Get dashboard statistics",
-    description="Get dashboard statistics including today's orders count and all orders count",
+    description="Get dashboard statistics including orders count and users count",
     parameters=[MARKET_PARAM],
     responses={
         200: DashboardStatsSerializer,
@@ -235,6 +235,7 @@ def dashboard_stats(request):
     - today_orders_count: Orders created in last 24 hours
     - all_orders_count: Total orders count
     - active_orders_count: Active orders (pending, confirmed, processing, shipped)
+    - total_users_count: Total users count for this market
     - market: Current market filter
     """
     manager = get_manager(request)
@@ -271,11 +272,16 @@ def dashboard_stats(request):
     # Get active orders count
     active_orders = get_active_orders_count(market)
     
+    # Get total users count for this market
+    from users.models import User
+    total_users = User.objects.filter(location=market).count()
+    
     return Response({
         'success': True,
         'today_orders_count': today_orders,
         'all_orders_count': all_orders,
         'active_orders_count': active_orders,
+        'total_users_count': total_users,
         'market': market,
     }, status=status.HTTP_200_OK)
 
