@@ -24,7 +24,7 @@ from .views import (
     WishlistGetView,
     WishlistRemoveView,
 )
-from .views_currency import CurrencyListView, CurrencyConvertView, MarketCurrencyView
+from .views_currency import CurrencyListView, CurrencyConvertView, MarketCurrencyView, CurrencyUpdateRatesView
 
 urlpatterns = [
     # Category endpoints
@@ -77,6 +77,7 @@ urlpatterns = [
     re_path(r"^currencies/?$", CurrencyListView.as_view(), name="currency-list"),
     re_path(r"^currencies/convert/?$", CurrencyConvertView.as_view(), name="currency-convert"),
     re_path(r"^currencies/market/?$", MarketCurrencyView.as_view(), name="market-currency"),
+    re_path(r"^currencies/update-rates/?$", CurrencyUpdateRatesView.as_view(), name="currency-update-rates"),
 ]
 
 

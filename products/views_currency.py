@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiTypes,
+    OpenApiResponse,
     extend_schema,
     inline_serializer,
 )
@@ -16,6 +17,10 @@ from drf_spectacular.utils import (
 from .models import Currency
 from .serializers import CurrencySerializer
 from .utils import convert_currency, get_market_currency
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from django.core.management import call_command
+from io import StringIO
+from io import StringIO
 
 
 class CurrencyListView(APIView):
@@ -186,4 +191,91 @@ class MarketCurrencyView(APIView):
         
         # Fallback to dictionary
         return Response(currency_info)
+
+
+class CurrencyUpdateRatesView(APIView):
+    """Update exchange rates from external API."""
+    
+    permission_classes = [IsAuthenticated, IsAdminUser]  # Only admins can update rates
+    
+    @extend_schema(
+        summary="Update exchange rates",
+        description="Fetch and update exchange rates from external API. Requires admin authentication.",
+        parameters=[
+            OpenApiParameter(
+                name="api",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="API provider to use: 'exchangerate', 'fixer', or 'currencyapi' (default: exchangerate)",
+            ),
+            OpenApiParameter(
+                name="force",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Force update even if rates were recently updated (default: false)",
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                name="CurrencyUpdateResponse",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "message": serializers.CharField(),
+                    "updated_count": serializers.IntegerField(),
+                },
+            ),
+            403: OpenApiResponse(description="Forbidden - Admin access required"),
+        },
+        tags=["currency"],
+    )
+    def post(self, request):
+        """Trigger exchange rate update."""
+        api_provider = request.query_params.get('api', 'exchangerate')
+        force = request.query_params.get('force', 'false').lower() == 'true'
+        
+        # Capture command output
+        out = StringIO()
+        err = StringIO()
+        
+        try:
+            call_command(
+                'update_exchange_rates',
+                api=api_provider,
+                force=force,
+                stdout=out,
+                stderr=err,
+            )
+            
+            output = out.getvalue()
+            error_output = err.getvalue()
+            
+            # Parse output to get updated count
+            updated_count = 0
+            if 'Successfully updated' in output:
+                try:
+                    # Extract number from "Successfully updated X currency exchange rate(s)"
+                    import re
+                    match = re.search(r'Successfully updated (\d+)', output)
+                    if match:
+                        updated_count = int(match.group(1))
+                except:
+                    pass
+            
+            return Response({
+                'success': True,
+                'message': 'Exchange rates updated successfully',
+                'updated_count': updated_count,
+                'output': output,
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Failed to update exchange rates: {str(e)}',
+                'error': str(e),
+                'output': out.getvalue(),
+                'error_output': err.getvalue(),
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
