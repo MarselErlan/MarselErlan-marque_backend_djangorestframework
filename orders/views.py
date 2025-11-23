@@ -13,7 +13,8 @@ from decimal import Decimal
 from .models import Order, OrderItem, Review, ReviewImage
 from .serializers import OrderCreateSerializer, OrderSerializer, ReviewCreateSerializer, ReviewSerializer
 from users.models import Address, PaymentMethod
-from products.models import Cart, CartItem, SKU, Product
+from products.models import Cart, CartItem, SKU, Product, Currency
+from products.utils import convert_currency, get_market_currency
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 
@@ -92,19 +93,71 @@ def create_order(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    # Calculate subtotal from cart items
+    # Get target currency from request or user
+    target_currency_code = validated_data.get('currency_code') or validated_data.get('currency')
+    if not target_currency_code:
+        # Fallback to user's currency
+        if hasattr(user, 'get_currency_code'):
+            target_currency_code = user.get_currency_code()
+        else:
+            # Infer from user location
+            user_location = getattr(user, 'location', 'KG')
+            if user_location == 'US':
+                target_currency_code = 'USD'
+            else:
+                target_currency_code = 'KGS'
+    
+    # Normalize currency code (handle symbol like '$' or 'сом')
+    if target_currency_code in ['$', 'USD']:
+        target_currency_code = 'USD'
+    elif target_currency_code in ['сом', 'KGS', 'KGS']:
+        target_currency_code = 'KGS'
+    
+    # Get currency object for symbol
+    try:
+        target_currency = Currency.objects.get(code=target_currency_code, is_active=True)
+        currency_symbol = target_currency.symbol
+    except Currency.DoesNotExist:
+        # Fallback
+        currency_symbol = '$' if target_currency_code == 'USD' else 'сом'
+    
+    # Calculate subtotal from cart items (convert to target currency)
     subtotal = Decimal('0.00')
     for cart_item in cart_items:
-        subtotal += cart_item.subtotal
+        sku = cart_item.sku
+        # Get SKU's currency
+        sku_currency = sku.get_currency()
+        sku_currency_code = sku_currency.code if sku_currency else 'KGS'
+        
+        # Convert price if needed
+        if sku_currency_code != target_currency_code:
+            converted_price = Decimal(str(convert_currency(float(sku.price), sku_currency_code, target_currency_code)))
+        else:
+            converted_price = sku.price
+        
+        item_subtotal = converted_price * cart_item.quantity
+        subtotal += item_subtotal
     
-    # Get shipping cost and tax
-    shipping_cost = validated_data.get('shipping_cost', Decimal('350.00'))
+    # Get shipping cost and convert to target currency
+    # Default shipping cost is 150 KGS (frontend uses 150)
+    default_shipping_kgs = Decimal('150.00')
+    shipping_cost_kgs = validated_data.get('shipping_cost', default_shipping_kgs)
+    
+    # If shipping_cost was provided, assume it's in KGS (original currency)
+    # We'll convert it to target currency
+    
+    # Convert shipping cost to target currency
+    if target_currency_code != 'KGS':
+        shipping_cost = Decimal(str(convert_currency(float(shipping_cost_kgs), 'KGS', target_currency_code)))
+    else:
+        shipping_cost = shipping_cost_kgs
+    
     tax = validated_data.get('tax', Decimal('0.00'))
     total_amount = subtotal + shipping_cost + tax
     
-    # Get currency from user
-    currency = user.get_currency() if hasattr(user, 'get_currency') else 'сом'
-    currency_code = user.get_currency_code() if hasattr(user, 'get_currency_code') else 'KGS'
+    # Set currency for order
+    currency = currency_symbol
+    currency_code = target_currency_code
     
     # Create order
     order = Order.objects.create(
@@ -131,10 +184,23 @@ def create_order(request):
         payment_status='pending',
     )
     
-    # Create order items from cart items
+    # Create order items from cart items (with converted prices)
     for cart_item in cart_items:
         sku = cart_item.sku
         product = sku.product
+        
+        # Get SKU's currency
+        sku_currency = sku.get_currency()
+        sku_currency_code = sku_currency.code if sku_currency else 'KGS'
+        
+        # Convert price to target currency
+        if sku_currency_code != target_currency_code:
+            converted_price = Decimal(str(convert_currency(float(sku.price), sku_currency_code, target_currency_code)))
+        else:
+            converted_price = sku.price
+        
+        # Calculate subtotal in target currency
+        item_subtotal = converted_price * cart_item.quantity
         
         # Get product image (prefer variant image, then first product image, then product main image)
         image_url = None
@@ -155,9 +221,9 @@ def create_order(request):
             product_brand=product.brand or '',
             size=sku.size,
             color=sku.color,
-            price=sku.price,
+            price=converted_price,  # Store converted price
             quantity=cart_item.quantity,
-            subtotal=cart_item.subtotal,
+            subtotal=item_subtotal,  # Store converted subtotal
             image_url=image_url,
         )
     

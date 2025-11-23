@@ -52,6 +52,9 @@ class OrderCreateSerializer(serializers.Serializer):
     
     use_cart = serializers.BooleanField(default=True)
     
+    currency = serializers.CharField(max_length=10, required=False, allow_blank=True, help_text="Currency symbol (e.g., $, сом)")
+    currency_code = serializers.CharField(max_length=3, required=False, allow_blank=True, help_text="ISO 4217 currency code (e.g., USD, KGS)")
+    
     def validate_shipping_address_id(self, value):
         if value:
             request = self.context.get('request')
