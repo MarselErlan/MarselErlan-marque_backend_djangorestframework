@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models import Count, Max, Min, Prefetch, Q
+from django.db.models import Count, Max, Min, Prefetch, Q, Sum
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 from rest_framework import status
@@ -31,7 +31,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 
-from orders.models import Review
+from orders.models import Review, Order, OrderItem
 from .models import (
     Brand,
     Cart,
@@ -295,6 +295,99 @@ class CategoryListView(MarketAwareAPIView):
             {
                 "categories": serializer.data,
                 "total": queryset.count(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PopularCategoriesView(MarketAwareAPIView):
+    """
+    GET /api/v1/categories/popular
+    
+    Returns categories sorted by total sales (quantity of items sold).
+    Only counts completed orders (delivered, shipped, confirmed, processing).
+    Excludes cancelled and refunded orders.
+    """
+
+    def get_queryset(self, request):
+        market = self.resolve_market(request)
+        
+        # Filter for completed orders (not cancelled or refunded)
+        completed_order_statuses = ['confirmed', 'processing', 'shipped', 'delivered']
+        
+        # Get categories with sales count from order items
+        # Relationship: Category -> Product -> SKU -> OrderItem -> Order
+        queryset = (
+            Category.objects.filter(
+                is_active=True,
+                products__skus__orderitem__order__status__in=completed_order_statuses
+            )
+            .annotate(
+                # Sum of quantities sold for this category
+                # Use distinct=False to count all order items (not just unique ones)
+                total_sales=Sum(
+                    'products__skus__orderitem__quantity',
+                    filter=Q(
+                        products__skus__orderitem__order__status__in=completed_order_statuses,
+                        products__is_active=True
+                    ),
+                    distinct=False
+                ),
+                # Product count for market filtering
+                product_count=Count(
+                    "products",
+                    filter=Q(
+                        products__is_active=True,
+                        products__in_stock=True
+                    ) & (Q(products__market=market) | Q(products__market="ALL")),
+                    distinct=True
+                )
+            )
+            .distinct()  # Ensure we don't get duplicate categories
+            # Only include categories that have at least one sale
+            .filter(total_sales__gt=0)
+            # Order by total sales descending, then by name
+            .order_by('-total_sales', 'name')
+        )
+        
+        return self.apply_market_filter(queryset, market)
+
+    @extend_schema(
+        summary="Retrieve popular categories by sales",
+        tags=["categories"],
+        parameters=[
+            MARKET_QUERY_PARAM,
+            OpenApiParameter(
+                name="limit",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Maximum number of categories to return (default: all).",
+                required=False,
+            ),
+        ],
+        responses={200: CategoryListResponseSerializer},
+    )
+    def get(self, request):
+        queryset = self.get_queryset(request)
+        
+        # Apply limit if provided
+        limit = request.query_params.get('limit')
+        if limit:
+            try:
+                limit = int(limit)
+                queryset = queryset[:limit]
+            except (ValueError, TypeError):
+                pass
+        
+        serializer = CategoryListSerializer(
+            queryset,
+            many=True,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "categories": serializer.data,
+                "total": len(serializer.data),
             },
             status=status.HTTP_200_OK,
         )

@@ -7,6 +7,7 @@ from django.urls import path, re_path
 from .views import (
     CategoryDetailView,
     CategoryListView,
+    PopularCategoriesView,
     CategorySubcategoryListView,
     CartAddView,
     CartClearView,
@@ -29,6 +30,7 @@ from .views_currency import CurrencyListView, CurrencyConvertView, MarketCurrenc
 urlpatterns = [
     # Category endpoints
     re_path(r"^categories/?$", CategoryListView.as_view(), name="category-list"),
+    re_path(r"^categories/popular/?$", PopularCategoriesView.as_view(), name="category-popular"),
     re_path(r"^categories/(?P<slug>[-\w]+)/?$", CategoryDetailView.as_view(), name="category-detail"),
     re_path(
         r"^categories/(?P<slug>[-\w]+)/subcategories/?$",
