@@ -33,6 +33,7 @@ from drf_spectacular.utils import (
 
 from orders.models import Review
 from .models import (
+    Brand,
     Cart,
     CartItem,
     Category,
@@ -449,8 +450,10 @@ class SubcategoryProductsView(MarketAwareAPIView):
                 ]
             )
         if brands := request.query_params.get("brands"):
+            brand_list = [brand.strip() for brand in brands.split(",") if brand.strip()]
+            # Filter by brand slug or name
             queryset = queryset.filter(
-                brand__in=[brand.strip() for brand in brands.split(",") if brand.strip()]
+                Q(brand__slug__in=brand_list) | Q(brand__name__in=brand_list)
             )
         price_min = request.query_params.get("price_min")
         if price_min:
@@ -478,25 +481,31 @@ class SubcategoryProductsView(MarketAwareAPIView):
             .distinct()
             .exclude(skus__color_option__name__isnull=True)
         )
-        brands = (
-            base_queryset.values_list("brand", flat=True)
+        
+        # Get unique brands from products
+        brand_ids = (
+            base_queryset.values_list("brand__id", flat=True)
             .distinct()
             .exclude(brand__isnull=True)
-            .exclude(brand__exact="")
         )
+        
+        # Get Brand objects
+        brands = Brand.objects.filter(id__in=brand_ids, is_active=True).order_by("name")
+        
         price_agg = base_queryset.aggregate(
             min_price=Min("skus__price"),
             max_price=Max("skus__price"),
         )
+        
         return {
             "available_sizes": sorted({size for size in sizes if size}),
             "available_colors": sorted({color for color in colors if color}),
             "available_brands": [
                 {
-                    "name": brand,
-                    "slug": slugify(brand) if brand else None,
+                    "name": brand.name,
+                    "slug": brand.slug,
                 }
-                for brand in sorted({brand for brand in brands if brand})
+                for brand in brands
             ],
             "price_range": {
                 "min": float(price_agg["min_price"]) if price_agg["min_price"] else 0.0,
@@ -1137,7 +1146,9 @@ class ProductListView(MarketAwareAPIView):
 
         brand = request.query_params.get("brand")
         if brand:
-            queryset = queryset.filter(brand__iexact=brand)
+            queryset = queryset.filter(
+                Q(brand__slug__iexact=brand) | Q(brand__name__iexact=brand)
+            )
 
         gender = request.query_params.get("gender")
         if gender:
@@ -1252,7 +1263,7 @@ class ProductSearchView(MarketAwareAPIView):
         if query:
             queryset = queryset.filter(
                 Q(name__icontains=query)
-                | Q(brand__icontains=query)
+                | Q(brand__name__icontains=query)
                 | Q(description__icontains=query)
                 | Q(category__name__icontains=query)
                 | Q(subcategory__name__icontains=query)
@@ -1271,7 +1282,10 @@ class ProductSearchView(MarketAwareAPIView):
             queryset = queryset.filter(skus__color_option__name__in=[color.strip() for color in colors.split(",") if color.strip()])
 
         if brands := request.query_params.get("brands"):
-            queryset = queryset.filter(brand__in=[brand.strip() for brand in brands.split(",") if brand.strip()])
+            brand_list = [brand.strip() for brand in brands.split(",") if brand.strip()]
+            queryset = queryset.filter(
+                Q(brand__slug__in=brand_list) | Q(brand__name__in=brand_list)
+            )
 
         price_min = request.query_params.get("price_min")
         price_max = request.query_params.get("price_max")

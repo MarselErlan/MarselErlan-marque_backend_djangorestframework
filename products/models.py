@@ -127,6 +127,41 @@ class Subcategory(models.Model):
         super().save(*args, **kwargs)
 
 
+class Brand(models.Model):
+    """Product brands"""
+    
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    image = models.ImageField(upload_to='brands/', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'brands'
+        verbose_name = 'Brand'
+        verbose_name_plural = 'Brands'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+            # Handle slug uniqueness
+            original_slug = self.slug
+            counter = 1
+            while Brand.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{original_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
+
 class Product(models.Model):
     """Products
     
@@ -149,7 +184,14 @@ class Product(models.Model):
     
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=280, unique=True, blank=True)
-    brand = models.CharField(max_length=100)
+    brand = models.ForeignKey(
+        'Brand',
+        on_delete=models.PROTECT,
+        related_name='products',
+        null=True,
+        blank=True,
+        help_text="Product brand"
+    )
     description = models.TextField(null=True, blank=True)
     
     # Market
@@ -278,7 +320,8 @@ class Product(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.brand} - {self.name}"
+        brand_name = self.brand.name if self.brand else "No Brand"
+        return f"{brand_name} - {self.name}"
     
     def get_currency(self):
         """Get currency for this product, falling back to market default"""
@@ -298,7 +341,8 @@ class Product(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.slug:
-            base_slug = slugify(f"{self.brand}-{self.name}")
+            brand_part = self.brand.slug if self.brand else "product"
+            base_slug = slugify(f"{brand_part}-{self.name}")
             slug = base_slug
             counter = 1
             while Product.objects.filter(slug=slug).exists():
@@ -325,7 +369,7 @@ class Product(models.Model):
         return {
             'id': self.id,
             'name': self.name,
-            'brand': self.brand,
+            'brand': self.brand.name if self.brand else None,
             'description': self.ai_description or self.description,
             'price': float(self.price),
             'category': self.category.name,

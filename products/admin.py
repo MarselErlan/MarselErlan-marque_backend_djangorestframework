@@ -1,7 +1,26 @@
 from django.contrib import admin
-from .models import (Category, Subcategory, Product, ProductImage, 
+from .models import (Brand, Category, Subcategory, Product, ProductImage, 
                      ProductFeature, ProductSizeOption, ProductColorOption, SKU,
                      Cart, CartItem, Wishlist, WishlistItem, Currency)
+
+
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ('name', 'slug', 'is_active', 'created_at', 'updated_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'slug')
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ('name',)
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'slug', 'image', 'is_active')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(Currency)
@@ -102,8 +121,8 @@ class SKUInline(admin.TabularInline):
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'brand', 'market', 'gender', 'category', 'subcategory', 'price', 'discount', 'sales_count', 'rating', 'in_stock', 'is_active')
     list_filter = ('market', 'gender', 'category', 'subcategory', 'brand', 'is_active', 'in_stock', 'is_featured', 'is_best_seller', 'created_at')
-    search_fields = ('name', 'brand', 'description', 'ai_description')
-    prepopulated_fields = {'slug': ('brand', 'name')}
+    search_fields = ('name', 'brand__name', 'description', 'ai_description')
+    prepopulated_fields = {'slug': ('name',)}
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at')
     

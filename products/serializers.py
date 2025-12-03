@@ -13,6 +13,7 @@ from rest_framework import serializers
 
 from orders.models import Review
 from .models import (
+    Brand,
     Cart,
     CartItem,
     Category,
@@ -242,12 +243,25 @@ class ProductSerializerMixin:
         colors = {sku.color for sku in skus if sku.color}
         return sorted(colors)
 
-    @staticmethod
-    def _brand_payload(obj: Product) -> Dict[str, Optional[str]]:
-        brand_slug = slugify(obj.brand) if obj.brand else None
+    def _brand_payload(self, obj: Product) -> Dict[str, Optional[str]]:
+        """Return brand information including name, slug, id, and image URL"""
+        if not obj.brand:
+            return {
+                "id": None,
+                "name": None,
+                "slug": None,
+                "image": None,
+            }
+        
+        brand_image_url = None
+        if obj.brand.image:
+            brand_image_url = self._build_absolute_uri(obj.brand.image.url)
+        
         return {
-            "name": obj.brand,
-            "slug": brand_slug,
+            "id": obj.brand.id,
+            "name": obj.brand.name,
+            "slug": obj.brand.slug,
+            "image": brand_image_url,
         }
 
     def _build_absolute_uri(self, path: Optional[str]) -> Optional[str]:
@@ -350,7 +364,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
 
     title = serializers.CharField(source="name")
     brand = serializers.SerializerMethodField()
-    brand_name = serializers.CharField(source="brand", read_only=True)
+    brand_name = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
     price_min = serializers.SerializerMethodField()
@@ -406,6 +420,10 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
 
     def get_brand(self, obj: Product) -> Dict[str, Optional[str]]:
         return self._brand_payload(obj)
+    
+    def get_brand_name(self, obj: Product) -> Optional[str]:
+        """Return brand name as string for backward compatibility"""
+        return obj.brand.name if obj.brand else None
 
     def get_image(self, obj: Product) -> Optional[str]:
         if not obj.image:
@@ -642,7 +660,7 @@ class ProductDetailSerializer(ProductListSerializer):
 
         # Ensure some core attributes are always present
         if obj.brand and "Бренд" not in attributes:
-            attributes["Бренд"] = obj.brand
+            attributes["Бренд"] = obj.brand.name
         if obj.category and obj.category.name and "Категория" not in attributes:
             attributes["Категория"] = obj.category.name
         if obj.subcategory and obj.subcategory.name and "Подкатегория" not in attributes:
@@ -751,8 +769,8 @@ class CartItemSerializer(ProductSerializerMixin, serializers.ModelSerializer):
 
     def get_brand(self, obj: CartItem) -> Optional[str]:
         try:
-            if obj.sku and obj.sku.product:
-                return obj.sku.product.brand
+            if obj.sku and obj.sku.product and obj.sku.product.brand:
+                return obj.sku.product.brand.name
             return None
         except AttributeError:
             return None
