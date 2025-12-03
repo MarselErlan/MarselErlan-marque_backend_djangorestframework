@@ -62,7 +62,7 @@ class CategoryAdmin(admin.ModelAdmin):
         }),
         ('Images', {
             'fields': ('image', 'image_url', 'icon'),
-            'description': 'Upload an image file OR provide an external image URL. Image file takes priority.'
+            'description': 'Upload image/icon files OR provide an external image URL. Uploaded files take priority. Icon is for category icon/image upload.'
         }),
         ('Settings', {
             'fields': ('is_active', 'sort_order')

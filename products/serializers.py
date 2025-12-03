@@ -56,13 +56,14 @@ class CategoryListSerializer(CategorySummarySerializer):
     """Full representation of a category for catalog listings."""
 
     image_url = serializers.SerializerMethodField()
+    icon_url = serializers.SerializerMethodField()
     product_count = serializers.IntegerField(read_only=True)
 
     class Meta(CategorySummarySerializer.Meta):
         fields = CategorySummarySerializer.Meta.fields + (
             "description",
             "image_url",
-            "icon",
+            "icon_url",
             "is_active",
             "market",
             "sort_order",
@@ -82,6 +83,14 @@ class CategoryListSerializer(CategorySummarySerializer):
             if request and obj.image_url.startswith("/"):
                 return request.build_absolute_uri(obj.image_url)
             return obj.image_url
+        return None
+    
+    def get_icon_url(self, obj: Category) -> Optional[str]:
+        """Return icon URL from uploaded icon file."""
+        if getattr(obj, "icon", None) and obj.icon:
+            url = obj.icon.url
+            request = self.context.get("request") if hasattr(self, "context") else None
+            return request.build_absolute_uri(url) if request else url
         return None
 
 

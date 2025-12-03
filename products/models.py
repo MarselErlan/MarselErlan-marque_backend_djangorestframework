@@ -73,7 +73,7 @@ class Category(models.Model):
     description = models.TextField(null=True, blank=True)
     image = models.ImageField(upload_to='categories/', null=True, blank=True, help_text="Category image/icon")
     image_url = models.URLField(max_length=500, null=True, blank=True, help_text="Alternative: External image URL (if not uploading file)")
-    icon = models.CharField(max_length=50, null=True, blank=True)  # Lucide icon name
+    icon = models.ImageField(upload_to='categories/icons/', null=True, blank=True, help_text="Category icon file (upload icon image)")
     is_active = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
