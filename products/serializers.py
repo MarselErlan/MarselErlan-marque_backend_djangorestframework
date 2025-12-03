@@ -55,6 +55,7 @@ class SubcategorySummarySerializer(serializers.ModelSerializer):
 class CategoryListSerializer(CategorySummarySerializer):
     """Full representation of a category for catalog listings."""
 
+    image_url = serializers.SerializerMethodField()
     product_count = serializers.IntegerField(read_only=True)
 
     class Meta(CategorySummarySerializer.Meta):
@@ -67,6 +68,21 @@ class CategoryListSerializer(CategorySummarySerializer):
             "sort_order",
             "product_count",
         )
+    
+    def get_image_url(self, obj: Category) -> Optional[str]:
+        """Return image URL from uploaded image file or image_url field."""
+        # Priority 1: Check if image file was uploaded
+        if getattr(obj, "image", None) and obj.image:
+            url = obj.image.url
+            request = self.context.get("request") if hasattr(self, "context") else None
+            return request.build_absolute_uri(url) if request else url
+        # Priority 2: Check image_url field (external URL)
+        if obj.image_url:
+            request = self.context.get("request") if hasattr(self, "context") else None
+            if request and obj.image_url.startswith("/"):
+                return request.build_absolute_uri(obj.image_url)
+            return obj.image_url
+        return None
 
 
 class SubcategoryListSerializer(SubcategorySummarySerializer):

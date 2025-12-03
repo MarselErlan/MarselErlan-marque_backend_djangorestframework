@@ -55,6 +55,23 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ('name', 'description')
     prepopulated_fields = {'slug': ('name',)}
     ordering = ('market', 'sort_order', 'name')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'slug', 'market', 'description')
+        }),
+        ('Images', {
+            'fields': ('image', 'image_url', 'icon'),
+            'description': 'Upload an image file OR provide an external image URL. Image file takes priority.'
+        }),
+        ('Settings', {
+            'fields': ('is_active', 'sort_order')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(Subcategory)
