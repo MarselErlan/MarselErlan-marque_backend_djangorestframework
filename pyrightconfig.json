@@ -1,0 +1,46 @@
+{
+  "include": [
+    "**/*.py"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "venv",
+    "staticfiles",
+    "media",
+    ".venv"
+  ],
+  "defineConstant": {
+    "DEBUG": true
+  },
+  "stubPath": "",
+  "venvPath": ".",
+  "venv": "venv",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Darwin",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.11",
+      "pythonPlatform": "Darwin",
+      "extraPaths": [
+        "."
+      ]
+    }
+  ],
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": false,
+  "reportUnusedImport": "information",
+  "reportUnusedClass": "information",
+  "reportUnusedFunction": "information",
+  "reportUnusedVariable": "information",
+  "typeCheckingMode": "basic",
+  "ignore": [
+    "venv",
+    "staticfiles",
+    "media",
+    "__pycache__"
+  ]
+}
+
