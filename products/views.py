@@ -5,6 +5,7 @@ These endpoints power the product catalogue for the Next.js storefront.
 """
 
 import os
+import unicodedata
 from io import BytesIO
 from typing import Optional, Tuple
 from uuid import uuid4
@@ -23,7 +24,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import (
+from drf_spectacular.utils import (  # pyright: ignore[reportMissingImports]
     OpenApiParameter,
     OpenApiTypes,
     OpenApiResponse,
@@ -31,7 +32,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 
-from orders.models import Review, Order, OrderItem
+from orders.models import Review, Order, OrderItem  # pyright: ignore[reportMissingImports]
 from .models import (
     Brand,
     Cart,
@@ -1354,21 +1355,28 @@ class ProductSearchView(MarketAwareAPIView):
         queryset = self.apply_market_filter(queryset, market)
 
         if query:
+            # Normalize query for better multi-language support
+            # This ensures consistent searching across different Unicode representations
+            # NFKC normalization handles variations in Unicode characters (e.g., full-width vs half-width)
+            normalized_query = unicodedata.normalize('NFKC', query)
+            
             # Build search query with priority order:
             # 1. Exact SKU code match (highest priority)
-            # 2. Product name contains
+            # 2. Product name contains (supports Cyrillic, Latin, and other Unicode characters)
             # 3. Brand name contains
             # 4. SKU code contains (partial match)
             # 5. Description contains
             # 6. Category/subcategory name contains
+            # Django's icontains is Unicode-aware and handles multi-language searches automatically
+            # It works with Cyrillic (Russian, Kyrgyz), Latin (English), and other Unicode scripts
             search_q = (
-                Q(name__icontains=query)
-                | Q(brand__name__icontains=query)
-                | Q(description__icontains=query)
-                | Q(category__name__icontains=query)
-                | Q(subcategory__name__icontains=query)
-                | Q(skus__sku_code__iexact=query)  # Exact SKU match
-                | Q(skus__sku_code__icontains=query)  # Partial SKU match
+                Q(name__icontains=normalized_query)
+                | Q(brand__name__icontains=normalized_query)
+                | Q(description__icontains=normalized_query)
+                | Q(category__name__icontains=normalized_query)
+                | Q(subcategory__name__icontains=normalized_query)
+                | Q(skus__sku_code__iexact=normalized_query)  # Exact SKU match
+                | Q(skus__sku_code__icontains=normalized_query)  # Partial SKU match
             )
             queryset = queryset.filter(search_q)
 
