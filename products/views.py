@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models import Count, Max, Min, Prefetch, Q, Sum
+from django.db.models import Case, Count, Max, Min, Prefetch, Q, Sum, Value, When, IntegerField
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 from rest_framework import status
@@ -173,7 +173,7 @@ SEARCH_SORT_PARAM = OpenApiParameter(
     name="sort_by",
     type=OpenApiTypes.STR,
     location=OpenApiParameter.QUERY,
-    enum=["price_asc", "price_desc", "rating_desc", "bestsellers", "newest"],
+    enum=["relevance", "popular", "newest", "price_asc", "price_desc", "rating"],
     description="Sort order for search results.",
 )
 
@@ -1354,13 +1354,23 @@ class ProductSearchView(MarketAwareAPIView):
         queryset = self.apply_market_filter(queryset, market)
 
         if query:
-            queryset = queryset.filter(
+            # Build search query with priority order:
+            # 1. Exact SKU code match (highest priority)
+            # 2. Product name contains
+            # 3. Brand name contains
+            # 4. SKU code contains (partial match)
+            # 5. Description contains
+            # 6. Category/subcategory name contains
+            search_q = (
                 Q(name__icontains=query)
                 | Q(brand__name__icontains=query)
                 | Q(description__icontains=query)
                 | Q(category__name__icontains=query)
                 | Q(subcategory__name__icontains=query)
+                | Q(skus__sku_code__iexact=query)  # Exact SKU match
+                | Q(skus__sku_code__icontains=query)  # Partial SKU match
             )
+            queryset = queryset.filter(search_q)
 
         # Additional filters
         if category_slug := request.query_params.get("category"):
@@ -1397,17 +1407,73 @@ class ProductSearchView(MarketAwareAPIView):
             min_sku_price=Min("skus__price"),
         ).distinct()
 
-        sort_by = request.query_params.get("sort_by")
-        if sort_by == "price_asc":
+        sort_by = request.query_params.get("sort_by", "relevance" if query else "popular")
+        
+        # Apply relevance-based sorting by default when query exists
+        if sort_by == "relevance" and query:
+            # Check if query looks like a SKU (numeric or alphanumeric code)
+            is_sku_like = query.replace("-", "").replace("_", "").isalnum() and len(query) >= 3
+            
+            if is_sku_like:
+                # For SKU-like queries, prioritize exact SKU matches first
+                # Then by name matches, then by sales/rating
+                queryset = queryset.annotate(
+                    has_exact_sku=Case(
+                        When(skus__sku_code__iexact=query, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    has_partial_sku=Case(
+                        When(skus__sku_code__icontains=query, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                ).order_by(
+                    "-has_exact_sku",  # Exact SKU matches first
+                    "-has_partial_sku",  # Partial SKU matches second
+                    "-sales_count",  # Then by popularity
+                    "-rating",  # Then by rating
+                    "-created_at"  # Finally by newest
+                )
+            else:
+                # For text queries, prioritize name matches, then brand, then other
+                queryset = queryset.annotate(
+                    name_exact=Case(
+                        When(name__iexact=query, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    name_starts=Case(
+                        When(name__istartswith=query, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    brand_exact=Case(
+                        When(brand__name__iexact=query, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                ).order_by(
+                    "-name_exact",  # Exact name matches first
+                    "-name_starts",  # Name starts with query second
+                    "-brand_exact",  # Brand matches third
+                    "-sales_count",  # Then by popularity
+                    "-rating",  # Then by rating
+                    "-created_at"  # Finally by newest
+                )
+        elif sort_by == "price_asc":
             queryset = queryset.order_by("min_sku_price", "price")
         elif sort_by == "price_desc":
             queryset = queryset.order_by("-min_sku_price", "-price")
-        elif sort_by == "rating_desc":
+        elif sort_by == "rating" or sort_by == "rating_desc":
             queryset = queryset.order_by("-rating", "-sales_count")
-        elif sort_by == "bestsellers":
+        elif sort_by == "popular" or sort_by == "bestsellers":
             queryset = queryset.order_by("-sales_count", "-rating")
-        else:
+        elif sort_by == "newest":
             queryset = queryset.order_by("-created_at")
+        else:
+            # Default fallback
+            queryset = queryset.order_by("-sales_count", "-rating", "-created_at")
 
         total = queryset.count()
         products = queryset[offset : offset + limit]
