@@ -348,11 +348,19 @@ def create_review(request):
     )
     
     # Create review images if provided
+    review_images = []
     for image_file in images:
-        ReviewImage.objects.create(
+        review_image = ReviewImage.objects.create(
             review=review,
             image=image_file
         )
+        review_images.append(review_image)
+    
+    # Ensure all files are saved and closed
+    for review_image in review_images:
+        if review_image.image:
+            # Access the URL to ensure the file is saved
+            _ = review_image.image.url
     
     # Refresh review from database to ensure images are loaded
     review.refresh_from_db()

@@ -288,6 +288,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.IntegerField(read_only=True)
     delivery_date = serializers.SerializerMethodField()
     has_review = serializers.SerializerMethodField()
+    reviewed_product_ids = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -303,6 +304,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'items_count',
             'items',
             'has_review',
+            'reviewed_product_ids',
         ]
 
     def get_delivery_date(self, obj):
@@ -328,6 +330,28 @@ class OrderListSerializer(serializers.ModelSerializer):
                 ).exists()
                 return has_review
         return False
+    
+    def get_reviewed_product_ids(self, obj):
+        """Return list of product IDs that have been reviewed for this order"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return []
+        
+        from orders.models import Review
+        # Get all unique product IDs from order items
+        product_ids = set()
+        for item in obj.items.all():
+            if item.sku and item.sku.product:
+                product_ids.add(item.sku.product.id)
+        
+        # Get all reviewed product IDs for this order and user
+        reviewed_reviews = Review.objects.filter(
+            user=request.user,
+            order=obj,
+            product_id__in=product_ids
+        ).values_list('product_id', flat=True)
+        
+        return list(reviewed_reviews)
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
