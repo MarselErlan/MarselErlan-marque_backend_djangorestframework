@@ -104,7 +104,7 @@ class ReviewImageSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ReviewImage
-        fields = ['id', 'image', 'image_url', 'created_at']
+        fields = ['id', 'image_url', 'created_at']
         read_only_fields = ['id', 'created_at']
     
     def get_image_url(self, obj):
@@ -114,7 +114,7 @@ class ReviewImageSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.image.url)
             return obj.image.url
-        return obj.image_url
+        return obj.image_url if obj.image_url else None
 
 
 class ReviewCreateSerializer(serializers.Serializer):

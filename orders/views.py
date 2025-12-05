@@ -354,7 +354,13 @@ def create_review(request):
             image=image_file
         )
     
+    # Refresh review from database to ensure images are loaded
+    review.refresh_from_db()
+    
     # Serialize and return review
     review_serializer = ReviewSerializer(review, context={'request': request})
     
-    return Response(review_serializer.data, status=status.HTTP_201_CREATED)
+    # Get serialized data and ensure it's JSON-serializable
+    response_data = review_serializer.data
+    
+    return Response(response_data, status=status.HTTP_201_CREATED)
