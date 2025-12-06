@@ -74,13 +74,136 @@ class CategoryAdmin(admin.ModelAdmin):
     )
 
 
+class ChildSubcategoryInline(admin.TabularInline):
+    """Inline admin for showing child subcategories"""
+    model = Subcategory
+    fk_name = 'parent_subcategory'
+    extra = 0
+    fields = ('name', 'slug', 'is_active', 'sort_order', 'product_count_display')
+    readonly_fields = ('product_count_display',)
+    can_delete = True
+    show_change_link = True
+    
+    def product_count_display(self, obj):
+        """Display product count for child subcategory"""
+        if obj.pk:
+            count = obj.second_level_products.count()
+            return count
+        return "—"
+    product_count_display.short_description = 'Products'
+
+
 @admin.register(Subcategory)
 class SubcategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'slug', 'is_active', 'sort_order', 'created_at')
-    list_filter = ('category', 'is_active', 'created_at')
-    search_fields = ('name', 'description', 'category__name')
+    list_display = ('name', 'category', 'parent_subcategory', 'level_display', 'slug', 'is_active', 'sort_order', 'product_count_display', 'child_count_display', 'created_at')
+    list_filter = ('category', 'parent_subcategory', 'is_active', 'created_at')
+    search_fields = ('name', 'description', 'category__name', 'parent_subcategory__name')
     prepopulated_fields = {'slug': ('name',)}
-    ordering = ('category', 'sort_order', 'name')
+    ordering = ('category', 'parent_subcategory', 'sort_order', 'name')
+    readonly_fields = ('created_at', 'updated_at', 'level_display', 'product_count_display', 'child_count_display')
+    inlines = [ChildSubcategoryInline]
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('category', 'parent_subcategory', 'name', 'slug', 'description')
+        }),
+        ('Level Information', {
+            'fields': ('level_display',),
+            'description': 'Level 1: First-level subcategory (no parent). Level 2: Second-level subcategory (has parent).',
+            'classes': ('collapse',)
+        }),
+        ('Images', {
+            'fields': ('image', 'image_url'),
+            'description': 'Upload image file OR provide an external image URL. Uploaded files take priority.'
+        }),
+        ('Settings', {
+            'fields': ('is_active', 'sort_order')
+        }),
+        ('Statistics', {
+            'fields': ('product_count_display', 'child_count_display'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def level_display(self, obj):
+        """Display the level of this subcategory"""
+        if obj.pk:
+            level = obj.level
+            if level == 1:
+                return "Level 1 (First-level)"
+            elif level == 2:
+                return "Level 2 (Second-level)"
+            return "Unknown"
+        return "—"
+    level_display.short_description = 'Level'
+    level_display.admin_order_field = 'parent_subcategory'
+    
+    def product_count_display(self, obj):
+        """Display product count for this subcategory"""
+        if obj.pk:
+            if obj.level == 1:
+                # Count products with this subcategory and no second_subcategory
+                count = obj.products.filter(second_subcategory__isnull=True).count()
+            else:
+                # Count products with this as second_subcategory
+                count = obj.second_level_products.count()
+            return count
+        return "—"
+    product_count_display.short_description = 'Products'
+    
+    def child_count_display(self, obj):
+        """Display count of child subcategories"""
+        if obj.pk and obj.level == 1:
+            count = obj.child_subcategories.count()
+            return count if count > 0 else "—"
+        return "—"
+    child_count_display.short_description = 'Child Subcategories'
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        qs = super().get_queryset(request)
+        return qs.select_related('category', 'parent_subcategory')
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Filter parent_subcategory to only show first-level subcategories from the same category"""
+        if db_field.name == "parent_subcategory":
+            # Get the category from the form or request
+            obj_id = request.resolver_match.kwargs.get('object_id')
+            if obj_id:
+                try:
+                    subcategory = Subcategory.objects.get(pk=obj_id)
+                    category = subcategory.category
+                except Subcategory.DoesNotExist:
+                    category = None
+            else:
+                # For new objects, try to get category from request
+                category_id = request.GET.get('category')
+                if category_id:
+                    try:
+                        category = Category.objects.get(pk=category_id)
+                    except Category.DoesNotExist:
+                        category = None
+                else:
+                    category = None
+            
+            if category:
+                # Only show first-level subcategories (no parent) from the same category
+                kwargs["queryset"] = Subcategory.objects.filter(
+                    category=category,
+                    parent_subcategory__isnull=True
+                ).exclude(pk=obj_id) if obj_id else Subcategory.objects.filter(
+                    category=category,
+                    parent_subcategory__isnull=True
+                )
+            else:
+                # If no category selected, show all first-level subcategories
+                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
+        
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class ProductImageInline(admin.TabularInline):
@@ -136,12 +259,12 @@ class SKUInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'brand', 'market', 'gender', 'category', 'subcategory', 'price', 'discount', 'sales_count', 'rating', 'in_stock', 'is_active')
-    list_filter = ('market', 'gender', 'category', 'subcategory', 'brand', 'is_active', 'in_stock', 'is_featured', 'is_best_seller', 'created_at')
+    list_display = ('name', 'brand', 'market', 'gender', 'category', 'subcategory', 'second_subcategory', 'catalog_level_display', 'price', 'discount', 'sales_count', 'rating', 'in_stock', 'is_active')
+    list_filter = ('market', 'gender', 'category', 'subcategory', 'second_subcategory', 'brand', 'is_active', 'in_stock', 'is_featured', 'is_best_seller', 'created_at')
     search_fields = ('name', 'brand__name', 'description', 'ai_description')
     prepopulated_fields = {'slug': ('name',)}
     ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'catalog_level_display')
     
     inlines = [ProductSizeOptionInline, ProductColorOptionInline, SKUInline, ProductImageInline, ProductFeatureInline]
     
@@ -160,8 +283,14 @@ class ProductAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
             'description': 'These fields help AI understand and recommend products better'
         }),
-        ('Categorization', {
-            'fields': ('category', 'subcategory')
+        ('Categorization - Flexible 3-Level Catalog', {
+            'fields': ('category', 'subcategory', 'second_subcategory', 'catalog_level_display'),
+            'description': 'Flexible catalog structure:\n'
+                          '• Level 1: Category only (leave subcategory and second_subcategory empty)\n'
+                          '• Level 2: Category + Subcategory (leave second_subcategory empty)\n'
+                          '• Level 3: Category + Subcategory + Second Subcategory (fill all fields)\n\n'
+                          'Note: If second_subcategory is set, subcategory must also be set. '
+                          'Second subcategory must be a child of the first subcategory.'
         }),
         ('Pricing', {
             'fields': ('price', 'original_price', 'discount', 'currency')
@@ -183,6 +312,85 @@ class ProductAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def catalog_level_display(self, obj):
+        """Display the catalog level of this product"""
+        if obj.pk:
+            if obj.second_subcategory:
+                return "Level 3 (Category → Subcategory → Second Subcategory)"
+            elif obj.subcategory:
+                return "Level 2 (Category → Subcategory)"
+            elif obj.category:
+                return "Level 1 (Category only)"
+            return "No category"
+        return "—"
+    catalog_level_display.short_description = 'Catalog Level'
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        qs = super().get_queryset(request)
+        return qs.select_related('category', 'subcategory', 'second_subcategory', 'brand', 'currency')
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Filter subcategories based on selected category and parent relationships"""
+        obj_id = request.resolver_match.kwargs.get('object_id')
+        
+        if db_field.name == "subcategory":
+            # Get the category from the form or existing product
+            if obj_id:
+                try:
+                    product = Product.objects.get(pk=obj_id)
+                    category = product.category
+                except Product.DoesNotExist:
+                    category = None
+            else:
+                category_id = request.GET.get('category')
+                if category_id:
+                    try:
+                        category = Category.objects.get(pk=category_id)
+                    except Category.DoesNotExist:
+                        category = None
+                else:
+                    category = None
+            
+            if category:
+                # Only show first-level subcategories (no parent) from the same category
+                kwargs["queryset"] = Subcategory.objects.filter(
+                    category=category,
+                    parent_subcategory__isnull=True
+                )
+            else:
+                # If no category selected, show all first-level subcategories
+                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
+        
+        elif db_field.name == "second_subcategory":
+            # Get the subcategory from the form or existing product
+            if obj_id:
+                try:
+                    product = Product.objects.get(pk=obj_id)
+                    subcategory = product.subcategory
+                except Product.DoesNotExist:
+                    subcategory = None
+            else:
+                subcategory_id = request.GET.get('subcategory')
+                if subcategory_id:
+                    try:
+                        subcategory = Subcategory.objects.get(pk=subcategory_id)
+                    except Subcategory.DoesNotExist:
+                        subcategory = None
+                else:
+                    subcategory = None
+            
+            if subcategory:
+                # Only show second-level subcategories that are children of the selected subcategory
+                kwargs["queryset"] = Subcategory.objects.filter(
+                    parent_subcategory=subcategory
+                )
+            else:
+                # If no subcategory selected, show all second-level subcategories
+                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=False)
+        
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 @admin.register(SKU)
