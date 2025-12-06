@@ -9,6 +9,7 @@ from .views import (
     CategoryListView,
     PopularCategoriesView,
     CategorySubcategoryListView,
+    CategoryProductsView,
     CartAddView,
     CartClearView,
     CartGetView,
@@ -37,10 +38,22 @@ urlpatterns = [
         CategorySubcategoryListView.as_view(),
         name="category-subcategory-list",
     ),
+    # Category products (level 1: category -> products)
+    re_path(
+        r"^categories/(?P<slug>[-\w]+)/products/?$",
+        CategoryProductsView.as_view(),
+        name="category-products",
+    ),
     re_path(
         r"^categories/(?P<category_slug>[-\w]+)/subcategories/(?P<subcategory_slug>[-\w]+)/products/?$",
         SubcategoryProductsView.as_view(),
         name="category-subcategory-products",
+    ),
+    # 3-level catalog routing: category -> subcategory -> second_subcategory -> products
+    re_path(
+        r"^categories/(?P<category_slug>[-\w]+)/subcategories/(?P<subcategory_slug>[-\w]+)/subcategories/(?P<second_subcategory_slug>[-\w]+)/products/?$",
+        SubcategoryProductsView.as_view(),
+        name="category-subcategory-second-subcategory-products",
     ),
 
     # List & search endpoints

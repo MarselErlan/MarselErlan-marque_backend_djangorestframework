@@ -11,7 +11,7 @@ from typing import Dict, Iterable, List, Optional
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from orders.models import Review
+from orders.models import Review  # pyright: ignore[reportMissingImports]
 from .models import (
     Brand,
     Cart,
@@ -99,6 +99,8 @@ class SubcategoryListSerializer(SubcategorySummarySerializer):
 
     image_url = serializers.SerializerMethodField()
     product_count = serializers.IntegerField(read_only=True)
+    child_subcategories = serializers.SerializerMethodField()
+    level = serializers.IntegerField(read_only=True)
 
     class Meta(SubcategorySummarySerializer.Meta):
         fields = SubcategorySummarySerializer.Meta.fields + (
@@ -107,6 +109,8 @@ class SubcategoryListSerializer(SubcategorySummarySerializer):
             "is_active",
             "sort_order",
             "product_count",
+            "child_subcategories",
+            "level",
         )
 
     def get_image_url(self, obj: Subcategory) -> Optional[str]:
@@ -120,6 +124,13 @@ class SubcategoryListSerializer(SubcategorySummarySerializer):
                 return request.build_absolute_uri(obj.image_url)
             return obj.image_url
         return None
+    
+    def get_child_subcategories(self, obj: Subcategory) -> List[Dict]:
+        """Return child subcategories (second-level) if this is a first-level subcategory"""
+        if obj.level == 1:  # Only first-level subcategories have children
+            children = obj.child_subcategories.filter(is_active=True).order_by('sort_order', 'name')
+            return SubcategoryListSerializer(children, many=True, context=self.context).data
+        return []
 
 
 class CategoryDetailSerializer(CategoryListSerializer):
@@ -307,7 +318,7 @@ class ProductSerializerMixin:
     def _calculate_rating_avg(obj: Product) -> float:
         """Calculate average rating from approved reviews"""
         from django.db.models import Avg
-        from orders.models import Review
+        from orders.models import Review  # pyright: ignore[reportMissingImports]
         
         avg_rating = Review.objects.filter(
             product=obj,
@@ -319,7 +330,7 @@ class ProductSerializerMixin:
     @staticmethod
     def _calculate_rating_count(obj: Product) -> int:
         """Count approved reviews"""
-        from orders.models import Review
+        from orders.models import Review  # pyright: ignore[reportMissingImports]
         
         return Review.objects.filter(
             product=obj,
@@ -330,7 +341,7 @@ class ProductSerializerMixin:
     def _calculate_sold_count(obj: Product) -> int:
         """Calculate total quantity sold from delivered orders"""
         from django.db.models import Sum
-        from orders.models import OrderItem
+        from orders.models import OrderItem  # pyright: ignore[reportMissingImports]
         
         total_sold = OrderItem.objects.filter(
             sku__product=obj,
@@ -354,6 +365,7 @@ class ProductSerializerMixin:
             "images": [],
             "category": CategorySummarySerializer(obj.category).data if obj.category else None,
             "subcategory": SubcategorySummarySerializer(obj.subcategory).data if obj.subcategory else None,
+            "second_subcategory": SubcategorySummarySerializer(obj.second_subcategory).data if obj.second_subcategory else None,
             "available_sizes": self._available_sizes(obj),
             "available_colors": self._available_colors(obj),
             "rating_avg": self._calculate_rating_avg(obj),
@@ -405,6 +417,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     available_colors = serializers.SerializerMethodField()
     category = CategorySummarySerializer(read_only=True)
     subcategory = SubcategorySummarySerializer(read_only=True)
+    second_subcategory = SubcategorySummarySerializer(read_only=True)
     currency = serializers.SerializerMethodField()
 
     class Meta:
@@ -431,6 +444,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
             "available_colors",
             "category",
             "subcategory",
+            "second_subcategory",
             "market",
             "is_featured",
             "is_best_seller",
@@ -483,7 +497,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     def get_rating_avg(self, obj: Product) -> float:
         """Calculate average rating from approved reviews"""
         from django.db.models import Avg
-        from orders.models import Review
+        from orders.models import Review  # pyright: ignore[reportMissingImports]
         
         avg_rating = Review.objects.filter(
             product=obj,
@@ -494,7 +508,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     
     def get_rating_count(self, obj: Product) -> int:
         """Count approved reviews"""
-        from orders.models import Review
+        from orders.models import Review  # pyright: ignore[reportMissingImports]
         
         return Review.objects.filter(
             product=obj,
@@ -504,7 +518,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     def get_sold_count(self, obj: Product) -> int:
         """Calculate total quantity sold from delivered orders"""
         from django.db.models import Sum
-        from orders.models import OrderItem
+        from orders.models import OrderItem  # pyright: ignore[reportMissingImports]
         
         total_sold = OrderItem.objects.filter(
             sku__product=obj,
@@ -694,7 +708,7 @@ class ProductDetailSerializer(ProductListSerializer):
         return attributes
 
     def get_reviews(self, obj: Product) -> List[OrderedDict]:
-        from orders.models import ReviewImage
+        from orders.models import ReviewImage  # pyright: ignore[reportMissingImports]
         queryset = (
             obj.reviews
             .filter(is_approved=True)

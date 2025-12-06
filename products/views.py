@@ -274,7 +274,12 @@ class CategoryListView(MarketAwareAPIView):
             Category.objects.filter(is_active=True)
             .order_by("sort_order", "name")
             .annotate(
-                product_count=Count("products", filter=product_filter, distinct=True)
+                # Count products at all levels: direct, via subcategory, and via second_subcategory
+                product_count=Count(
+                    "products",
+                    filter=product_filter,
+                    distinct=True
+                )
             )
         )
         return self.apply_market_filter(queryset, market)
@@ -404,12 +409,19 @@ class CategoryDetailView(MarketAwareAPIView):
         return queryset.filter(slug=slug).first()
 
     def get_subcategories(self, category: Category, market: str):
+        """Get first-level subcategories (parent_subcategory is None)"""
         product_filter = (
             Q(products__is_active=True, products__in_stock=True)
             & (Q(products__market=market) | Q(products__market="ALL"))
+            & Q(products__second_subcategory__isnull=True)  # Only count level 2 products
         )
+        # Only get first-level subcategories (no parent)
         return (
-            Subcategory.objects.filter(category=category, is_active=True)
+            Subcategory.objects.filter(
+                category=category,
+                parent_subcategory__isnull=True,  # Only first-level
+                is_active=True
+            )
             .order_by("sort_order", "name")
             .annotate(
                 product_count=Count("products", filter=product_filter, distinct=True)
@@ -495,7 +507,7 @@ class SubcategoryProductsView(MarketAwareAPIView):
 
     default_limit = 20
 
-    def get_base_queryset(self, request, category_slug: Optional[str], sub_slug: str):
+    def get_base_queryset(self, request, category_slug: Optional[str], sub_slug: str, second_sub_slug: Optional[str] = None):
         market = self.resolve_market(request)
 
         category_qs = CategoryListView().get_queryset(request)
@@ -505,29 +517,66 @@ class SubcategoryProductsView(MarketAwareAPIView):
             category = category_qs.filter(subcategories__slug=sub_slug).first()
 
         if not category:
-            return None, None, None
+            return None, None, None, None
 
         product_filter = (
             Q(products__is_active=True, products__in_stock=True)
             & (Q(products__market=market) | Q(products__market="ALL"))
         )
 
+        # Get first-level subcategory
         subcategory_qs = (
-            Subcategory.objects.filter(category=category, slug=sub_slug, is_active=True)
+            Subcategory.objects.filter(
+                category=category,
+                slug=sub_slug,
+                parent_subcategory__isnull=True,  # First-level only
+                is_active=True
+            )
             .annotate(
                 product_count=Count("products", filter=product_filter, distinct=True)
             )
         )
         subcategory = subcategory_qs.first()
         if not subcategory:
-            return category, None, None
+            return category, None, None, None
 
-        products_qs = (
-            self.base_queryset()
-            .filter(category=category, subcategory=subcategory, in_stock=True)
-        )
+        # If second_sub_slug is provided, get second-level subcategory
+        second_subcategory = None
+        if second_sub_slug:
+            second_subcategory_qs = (
+                Subcategory.objects.filter(
+                    category=category,
+                    parent_subcategory=subcategory,
+                    slug=second_sub_slug,
+                    is_active=True
+                )
+                .annotate(
+                    product_count=Count("second_level_products", filter=product_filter, distinct=True)
+                )
+            )
+            second_subcategory = second_subcategory_qs.first()
+            if not second_subcategory:
+                return category, subcategory, None, None
+
+        # Build product query based on catalog level
+        products_qs = self.base_queryset().filter(category=category, in_stock=True)
+        
+        if second_subcategory:
+            # Level 3: category -> subcategory -> second_subcategory -> products
+            products_qs = products_qs.filter(
+                subcategory=subcategory,
+                second_subcategory=second_subcategory
+            )
+        else:
+            # Level 2: category -> subcategory -> products
+            # Get products that have this subcategory as first-level and no second-level
+            products_qs = products_qs.filter(
+                subcategory=subcategory,
+                second_subcategory__isnull=True
+            )
+        
         products_qs = self.apply_market_filter(products_qs, market)
-        return category, subcategory, products_qs
+        return category, subcategory, second_subcategory, products_qs
 
     @staticmethod
     def _apply_attribute_filters(queryset, request):
@@ -650,6 +699,7 @@ class SubcategoryProductsView(MarketAwareAPIView):
         request,
         category_slug: Optional[str] = None,
         subcategory_slug: Optional[str] = None,
+        second_subcategory_slug: Optional[str] = None,
     ):
         sub_slug = subcategory_slug or category_slug
         if not sub_slug:
@@ -660,8 +710,8 @@ class SubcategoryProductsView(MarketAwareAPIView):
 
         category_lookup = category_slug if category_slug and category_slug != sub_slug else None
 
-        category, subcategory, base_queryset = self.get_base_queryset(
-            request, category_lookup, sub_slug
+        category, subcategory, second_subcategory, base_queryset = self.get_base_queryset(
+            request, category_lookup, sub_slug, second_subcategory_slug
         )
         if category is None:
             return Response(
@@ -671,6 +721,11 @@ class SubcategoryProductsView(MarketAwareAPIView):
         if subcategory is None or base_queryset is None:
             return Response(
                 {"detail": "Subcategory not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if second_subcategory_slug and second_subcategory is None:
+            return Response(
+                {"detail": "Second-level subcategory not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -701,6 +756,92 @@ class SubcategoryProductsView(MarketAwareAPIView):
             "subcategory": SubcategoryListSerializer(
                 subcategory, context={"request": request}
             ).data,
+            "products": serializer.data,
+            "filters": filters_payload,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_more": page < total_pages,
+            "currency": currency,
+        }
+        
+        # Add second_subcategory to response if it exists (level 3)
+        if second_subcategory:
+            response_payload["second_subcategory"] = SubcategoryListSerializer(
+                second_subcategory, context={"request": request}
+            ).data
+
+        return Response(response_payload, status=status.HTTP_200_OK)
+
+
+class CategoryProductsView(SubcategoryProductsView):
+    """
+    GET /api/v1/categories/<slug>/products
+    Returns products directly linked to category (level 1 catalog)
+    """
+
+    @extend_schema(
+        summary="List products in a category (level 1)",
+        tags=["products"],
+        parameters=[
+            MARKET_QUERY_PARAM,
+            PAGE_QUERY_PARAM,
+            LIMIT_QUERY_PARAM,
+            PRODUCT_SORT_PARAM,
+            SIZES_PARAM,
+            COLORS_PARAM,
+            BRANDS_PARAM,
+            PRICE_MIN_PARAM,
+            PRICE_MAX_PARAM,
+        ],
+        responses={
+            200: SubcategoryProductsResponseSerializer,
+            404: OpenApiResponse(description="Category not found."),
+        },
+    )
+    def get(self, request, slug: str):
+        category = CategoryDetailView().get_category(request, slug)
+        if not category:
+            return Response(
+                {"detail": "Category not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        market = self.resolve_market(request)
+        
+        # Get products directly linked to category (no subcategory)
+        base_queryset = (
+            self.base_queryset()
+            .filter(category=category, subcategory__isnull=True, in_stock=True)
+        )
+        base_queryset = self.apply_market_filter(base_queryset, market)
+
+        filters_payload = self._get_available_filters(base_queryset)
+
+        queryset = self._apply_attribute_filters(base_queryset, request).distinct()
+        sort_by = request.query_params.get("sort_by", "popular")
+        queryset = self._apply_sorting(queryset, sort_by)
+
+        page, limit = self.resolve_pagination(request, self.default_limit)
+        offset = (page - 1) * limit
+        total = queryset.count()
+        products = queryset[offset : offset + limit]
+
+        serializer = ProductListSerializer(
+            products,
+            many=True,
+            context={"request": request},
+        )
+
+        total_pages = (total + limit - 1) // limit if limit else 1
+        currency = get_market_currency(market)
+
+        response_payload = {
+            "category": CategoryDetailSerializer(
+                category, context={"request": request}
+            ).data,
+            "subcategory": None,  # Level 1 has no subcategory
             "products": serializer.data,
             "filters": filters_payload,
             "total": total,

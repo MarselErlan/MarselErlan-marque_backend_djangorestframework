@@ -3,7 +3,7 @@ from django.db.models import Q
 from django.utils.text import slugify
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
-from users.models import User
+from users.models import User  # pyright: ignore[reportMissingImports]
 
 
 class Currency(models.Model):
@@ -99,9 +99,17 @@ class Category(models.Model):
 
 
 class Subcategory(models.Model):
-    """Product subcategories"""
+    """Product subcategories - supports 2-level hierarchy"""
     
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='subcategories')
+    parent_subcategory = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        related_name='child_subcategories',
+        null=True,
+        blank=True,
+        help_text="Parent subcategory for 3-level catalog structure. If set, this is a second-level subcategory."
+    )
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=120, blank=True)
     description = models.TextField(null=True, blank=True)
@@ -117,15 +125,34 @@ class Subcategory(models.Model):
         verbose_name = 'Subcategory'
         verbose_name_plural = 'Subcategories'
         ordering = ['sort_order', 'name']
-        unique_together = ['category', 'slug']
+        unique_together = [
+            ['category', 'slug'],  # First-level subcategories (unique per category)
+            ['parent_subcategory', 'slug'],  # Second-level subcategories (unique per parent)
+        ]
+        indexes = [
+            models.Index(fields=['category', 'parent_subcategory', 'is_active']),
+        ]
     
     def __str__(self):
+        if self.parent_subcategory:
+            return f"{self.category.name} -> {self.parent_subcategory.name} -> {self.name}"
         return f"{self.category.name} -> {self.name}"
+    
+    def clean(self):
+        """Validate that parent_subcategory belongs to the same category"""
+        if self.parent_subcategory and self.parent_subcategory.category != self.category:
+            raise ValidationError("Parent subcategory must belong to the same category.")
     
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+        self.full_clean()
         super().save(*args, **kwargs)
+    
+    @property
+    def level(self):
+        """Return the level of this subcategory (1 or 2)"""
+        return 2 if self.parent_subcategory else 1
 
 
 class Brand(models.Model):
@@ -198,9 +225,27 @@ class Product(models.Model):
     # Market
     market = models.CharField(max_length=3, choices=MARKET_CHOICES, default='KG', db_index=True)
     
-    # Categorization
+    # Categorization - Flexible 3-level catalog structure
+    # Level 1: category only
+    # Level 2: category + subcategory (first level)
+    # Level 3: category + subcategory (first level) + second_subcategory (second level)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
-    subcategory = models.ForeignKey(Subcategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    subcategory = models.ForeignKey(
+        Subcategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products',
+        help_text="First-level subcategory. Required for level 2 and 3 catalog."
+    )
+    second_subcategory = models.ForeignKey(
+        Subcategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='second_level_products',
+        help_text="Second-level subcategory. Required only for level 3 catalog."
+    )
     
     # Pricing
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -314,7 +359,7 @@ class Product(models.Model):
         indexes = [
             models.Index(fields=['slug']),
             models.Index(fields=['market', 'is_active', 'in_stock']),  # Main filtering index
-            models.Index(fields=['category', 'subcategory']),
+            models.Index(fields=['category', 'subcategory', 'second_subcategory']),
             models.Index(fields=['is_active', 'in_stock']),
             models.Index(fields=['-sales_count']),
             models.Index(fields=['gender', 'market']),  # For AI gender-based filtering
@@ -340,6 +385,29 @@ class Product(models.Model):
         except Currency.DoesNotExist:
             return None
     
+    def clean(self):
+        """Validate catalog structure consistency"""
+        errors = {}
+        
+        # If second_subcategory is set, subcategory must also be set
+        if self.second_subcategory and not self.subcategory:
+            errors['second_subcategory'] = "Cannot set second_subcategory without first-level subcategory."
+        
+        # If second_subcategory is set, it must be a child of subcategory
+        if self.second_subcategory and self.subcategory:
+            if self.second_subcategory.parent_subcategory != self.subcategory:
+                errors['second_subcategory'] = "Second subcategory must be a child of the first subcategory."
+        
+        # Ensure all subcategories belong to the same category
+        if self.subcategory and self.subcategory.category != self.category:
+            errors['subcategory'] = "Subcategory must belong to the same category."
+        
+        if self.second_subcategory and self.second_subcategory.category != self.category:
+            errors['second_subcategory'] = "Second subcategory must belong to the same category."
+        
+        if errors:
+            raise ValidationError(errors)
+    
     def save(self, *args, **kwargs):
         if not self.slug:
             brand_part = self.brand.slug if self.brand else "product"
@@ -354,7 +422,7 @@ class Product(models.Model):
         
         # Auto-sync to Pinecone after save (async in background)
         try:
-            from ai_assistant.pinecone_utils import sync_product_to_pinecone
+            from ai_assistant.pinecone_utils import sync_product_to_pinecone  # pyright: ignore[reportMissingImports]
             sync_product_to_pinecone(self)
         except Exception as e:
             # Log error but don't block the save
