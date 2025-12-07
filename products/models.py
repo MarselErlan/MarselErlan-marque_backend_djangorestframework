@@ -92,9 +92,30 @@ class Category(models.Model):
     def __str__(self):
         return f"{self.name} ({self.market})"
     
+    def clean(self):
+        """Validate category structure rules"""
+        errors = {}
+        
+        # Rule: Cannot create subcategories if category has products directly (level 1 products)
+        if self.pk:
+            # Check if category has products without subcategory (level 1 products)
+            has_level1_products = Product.objects.filter(
+                category=self,
+                subcategory__isnull=True
+            ).exists()
+            
+            if has_level1_products:
+                # Check if trying to add subcategories (this will be checked in Subcategory.clean)
+                # But we can't check here since subcategories are created separately
+                pass
+        
+        if errors:
+            raise ValidationError(errors)
+    
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+        self.full_clean()
         super().save(*args, **kwargs)
 
 
@@ -139,9 +160,81 @@ class Subcategory(models.Model):
         return f"{self.category.name} -> {self.name}"
     
     def clean(self):
-        """Validate that parent_subcategory belongs to the same category"""
+        """Validate subcategory structure and uniqueness rules"""
+        errors = {}
+        
+        # Validate that parent_subcategory belongs to the same category
         if self.parent_subcategory and self.parent_subcategory.category != self.category:
-            raise ValidationError("Parent subcategory must belong to the same category.")
+            errors['parent_subcategory'] = "Parent subcategory must belong to the same category."
+        
+        # Rule: Cannot create level 2 (subcategory) if category has products directly (level 1 products)
+        if not self.parent_subcategory and self.category:
+            # Check if category has products without subcategory (level 1 products)
+            category_has_level1_products = Product.objects.filter(
+                category=self.category,
+                subcategory__isnull=True
+            ).exists()
+            
+            if category_has_level1_products:
+                errors['category'] = (
+                    f"Cannot create subcategory under '{self.category.name}' "
+                    f"because it already has products directly assigned. "
+                    f"Remove all products from the category before creating subcategories."
+                )
+        
+        # Rule: Cannot create level 3 (child subcategory) if parent level 2 has products
+        if self.parent_subcategory:
+            # Check if parent subcategory has any products
+            parent_has_products = Product.objects.filter(
+                subcategory=self.parent_subcategory,
+                second_subcategory__isnull=True  # Products directly under the parent (level 2)
+            ).exists()
+            
+            if parent_has_products:
+                errors['parent_subcategory'] = (
+                    f"Cannot create child subcategory under '{self.parent_subcategory.name}' "
+                    f"because it already has products. Remove all products from the parent "
+                    f"subcategory before creating child subcategories."
+                )
+        
+        # Validate uniqueness: Check if slug already exists at the same level
+        if self.pk:  # Updating existing subcategory
+            # Check for first-level subcategories (no parent)
+            if not self.parent_subcategory:
+                existing = Subcategory.objects.filter(
+                    category=self.category,
+                    slug=self.slug,
+                    parent_subcategory__isnull=True
+                ).exclude(pk=self.pk)
+            else:
+                # Check for second-level subcategories (with parent)
+                existing = Subcategory.objects.filter(
+                    parent_subcategory=self.parent_subcategory,
+                    slug=self.slug
+                ).exclude(pk=self.pk)
+        else:  # Creating new subcategory
+            # Check for first-level subcategories (no parent)
+            if not self.parent_subcategory:
+                existing = Subcategory.objects.filter(
+                    category=self.category,
+                    slug=self.slug,
+                    parent_subcategory__isnull=True
+                )
+            else:
+                # Check for second-level subcategories (with parent)
+                existing = Subcategory.objects.filter(
+                    parent_subcategory=self.parent_subcategory,
+                    slug=self.slug
+                )
+        
+        if existing.exists():
+            if not self.parent_subcategory:
+                errors['slug'] = f"A subcategory with slug '{self.slug}' already exists in category '{self.category.name}'."
+            else:
+                errors['slug'] = f"A child subcategory with slug '{self.slug}' already exists under '{self.parent_subcategory.name}'."
+        
+        if errors:
+            raise ValidationError(errors)
     
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -404,6 +497,31 @@ class Product(models.Model):
         
         if self.second_subcategory and self.second_subcategory.category != self.category:
             errors['second_subcategory'] = "Second subcategory must belong to the same category."
+        
+        # Rule: Cannot add products directly to category (level 1) if it has subcategories (level 2)
+        if not self.subcategory and self.category:
+            # Check if category has subcategories
+            has_subcategories = self.category.subcategories.filter(
+                parent_subcategory__isnull=True
+            ).exists()
+            
+            if has_subcategories:
+                errors['category'] = (
+                    f"Cannot add products directly to category '{self.category.name}' "
+                    f"because it already has subcategories. "
+                    f"Either remove the subcategories or assign this product to one of them."
+                )
+        
+        # Rule: Cannot add products to level 2 subcategory if it already has child subcategories (level 3)
+        if self.subcategory and not self.second_subcategory:
+            # Check if this subcategory has child subcategories
+            has_children = self.subcategory.child_subcategories.exists()
+            if has_children:
+                errors['subcategory'] = (
+                    f"Cannot add products directly to '{self.subcategory.name}' "
+                    f"because it already has child subcategories. "
+                    f"Either remove the child subcategories or assign this product to one of them."
+                )
         
         if errors:
             raise ValidationError(errors)

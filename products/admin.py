@@ -50,12 +50,12 @@ class CurrencyAdmin(admin.ModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'market', 'slug', 'is_active', 'sort_order', 'created_at')
+    list_display = ('name', 'market', 'slug', 'is_active', 'sort_order', 'product_count_display', 'subcategory_count_display', 'created_at')
     list_filter = ('market', 'is_active', 'created_at')
     search_fields = ('name', 'description')
     prepopulated_fields = {'slug': ('name',)}
     ordering = ('market', 'sort_order', 'name')
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'product_count_display', 'subcategory_count_display')
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'slug', 'market', 'description')
@@ -67,11 +67,38 @@ class CategoryAdmin(admin.ModelAdmin):
         ('Settings', {
             'fields': ('is_active', 'sort_order')
         }),
+        ('Statistics', {
+            'fields': ('product_count_display', 'subcategory_count_display'),
+            'classes': ('collapse',),
+            'description': 'Product count: Products directly assigned to this category (level 1).\n'
+                          'Subcategory count: Number of first-level subcategories.\n\n'
+                          'Rule: Cannot create subcategories if category has products. '
+                          'Cannot add products if category has subcategories.'
+        }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+    
+    def product_count_display(self, obj):
+        """Display count of products directly assigned to category (level 1)"""
+        if obj.pk:
+            count = Product.objects.filter(
+                category=obj,
+                subcategory__isnull=True
+            ).count()
+            return count
+        return "—"
+    product_count_display.short_description = 'Level 1 Products'
+    
+    def subcategory_count_display(self, obj):
+        """Display count of first-level subcategories"""
+        if obj.pk:
+            count = obj.subcategories.filter(parent_subcategory__isnull=True).count()
+            return count if count > 0 else "—"
+        return "—"
+    subcategory_count_display.short_description = 'Subcategories'
 
 
 class ChildSubcategoryInline(admin.TabularInline):
@@ -109,7 +136,11 @@ class SubcategoryAdmin(admin.ModelAdmin):
         }),
         ('Level Information', {
             'fields': ('level_display',),
-            'description': 'Level 1: First-level subcategory (no parent). Level 2: Second-level subcategory (has parent).',
+            'description': 'Level 1: First-level subcategory (no parent). Level 2: Second-level subcategory (has parent).\n\n'
+                          'Validation Rules:\n'
+                          '• Cannot create subcategory (level 2) if category has products directly (level 1).\n'
+                          '• Cannot create child subcategory (level 3) if parent subcategory (level 2) has products.\n'
+                          '• All levels must be unique within their scope.',
             'classes': ('collapse',)
         }),
         ('Images', {
@@ -169,8 +200,38 @@ class SubcategoryAdmin(admin.ModelAdmin):
         return qs.select_related('category', 'parent_subcategory')
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        """Filter parent_subcategory to only show first-level subcategories from the same category"""
-        if db_field.name == "parent_subcategory":
+        """Filter category and parent_subcategory based on validation rules"""
+        obj_id = request.resolver_match.kwargs.get('object_id')
+        
+        # Filter category field: exclude categories that have products directly (level 1 products)
+        # This prevents creating subcategories if category already has products
+        if db_field.name == "category":
+            # Get all categories
+            all_categories = Category.objects.all()
+            
+            # Get categories that have products without subcategory (level 1 products)
+            categories_with_products = Product.objects.filter(
+                subcategory__isnull=True
+            ).values_list('category_id', flat=True).distinct()
+            
+            # Exclude categories with level 1 products, unless editing existing subcategory
+            available_categories = all_categories.exclude(
+                pk__in=categories_with_products
+            )
+            
+            # If editing existing subcategory, include its current category even if it has products
+            if obj_id:
+                try:
+                    subcategory = Subcategory.objects.get(pk=obj_id)
+                    if subcategory.category:
+                        available_categories = available_categories | Category.objects.filter(pk=subcategory.category.pk)
+                except Subcategory.DoesNotExist:
+                    pass
+            
+            kwargs["queryset"] = available_categories
+        
+        # Filter parent_subcategory to only show first-level subcategories from the same category that don't have products
+        elif db_field.name == "parent_subcategory":
             # Get the category from the form or request
             obj_id = request.resolver_match.kwargs.get('object_id')
             if obj_id:
@@ -192,16 +253,38 @@ class SubcategoryAdmin(admin.ModelAdmin):
             
             if category:
                 # Only show first-level subcategories (no parent) from the same category
-                kwargs["queryset"] = Subcategory.objects.filter(
-                    category=category,
-                    parent_subcategory__isnull=True
-                ).exclude(pk=obj_id) if obj_id else Subcategory.objects.filter(
+                # that don't have products (to allow creating level 3)
+                from .models import Product
+                first_level_subcats = Subcategory.objects.filter(
                     category=category,
                     parent_subcategory__isnull=True
                 )
+                
+                # Exclude subcategories that have products directly assigned (level 2 products)
+                # Get IDs of subcategories that have products
+                subcats_with_products = Product.objects.filter(
+                    subcategory__in=first_level_subcats,
+                    second_subcategory__isnull=True
+                ).values_list('subcategory_id', flat=True).distinct()
+                
+                # Filter out subcategories with products
+                available_parents = first_level_subcats.exclude(
+                    pk__in=subcats_with_products
+                )
+                
+                if obj_id:
+                    available_parents = available_parents.exclude(pk=obj_id)
+                
+                kwargs["queryset"] = available_parents
             else:
-                # If no category selected, show all first-level subcategories
-                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
+                # If no category selected, show all first-level subcategories without products
+                from .models import Product
+                first_level_subcats = Subcategory.objects.filter(parent_subcategory__isnull=True)
+                subcats_with_products = Product.objects.filter(
+                    subcategory__in=first_level_subcats,
+                    second_subcategory__isnull=True
+                ).values_list('subcategory_id', flat=True).distinct()
+                kwargs["queryset"] = first_level_subcats.exclude(pk__in=subcats_with_products)
         
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
@@ -289,8 +372,12 @@ class ProductAdmin(admin.ModelAdmin):
                           '• Level 1: Category only (leave subcategory and second_subcategory empty)\n'
                           '• Level 2: Category + Subcategory (leave second_subcategory empty)\n'
                           '• Level 3: Category + Subcategory + Second Subcategory (fill all fields)\n\n'
-                          'Note: If second_subcategory is set, subcategory must also be set. '
-                          'Second subcategory must be a child of the first subcategory.'
+                          'Validation Rules:\n'
+                          '• If second_subcategory is set, subcategory must also be set.\n'
+                          '• Second subcategory must be a child of the first subcategory.\n'
+                          '• Cannot add products to a subcategory that has child subcategories.\n'
+                          '• Cannot create child subcategories if parent has products.\n'
+                          '• All levels must be unique within their scope.'
         }),
         ('Pricing', {
             'fields': ('price', 'original_price', 'discount', 'currency')
@@ -335,33 +422,86 @@ class ProductAdmin(admin.ModelAdmin):
         """Filter subcategories based on selected category and parent relationships"""
         obj_id = request.resolver_match.kwargs.get('object_id')
         
-        if db_field.name == "subcategory":
-            # Get the category from the form or existing product
+        # Filter category field: exclude categories that have subcategories (to prevent adding level 1 products if category has subcategories)
+        if db_field.name == "category":
+            # Get all categories
+            all_categories = Category.objects.all()
+            
+            # Get categories that have subcategories
+            categories_with_subcats = all_categories.filter(
+                subcategories__parent_subcategory__isnull=True
+            ).distinct()
+            
+            # Exclude categories with subcategories, unless editing existing product
+            available_categories = all_categories.exclude(
+                pk__in=categories_with_subcats.values_list('pk', flat=True)
+            )
+            
+            # If editing existing product, include its current category even if it has subcategories
+            if obj_id:
+                try:
+                    product = Product.objects.get(pk=obj_id)
+                    if product.category:
+                        available_categories = available_categories | Category.objects.filter(pk=product.category.pk)
+                except Product.DoesNotExist:
+                    pass
+            
+            kwargs["queryset"] = available_categories
+        
+        # Filter subcategory field: exclude subcategories that have children (to prevent adding products to level 2 that has level 3)
+        elif db_field.name == "subcategory":
+            # Get category from form data or existing product
+            category_id = request.GET.get('category')
             if obj_id:
                 try:
                     product = Product.objects.get(pk=obj_id)
                     category = product.category
                 except Product.DoesNotExist:
                     category = None
-            else:
-                category_id = request.GET.get('category')
-                if category_id:
-                    try:
-                        category = Category.objects.get(pk=category_id)
-                    except Category.DoesNotExist:
-                        category = None
-                else:
+            elif category_id:
+                try:
+                    category = Category.objects.get(pk=category_id)
+                except Category.DoesNotExist:
                     category = None
+            else:
+                category = None
             
             if category:
-                # Only show first-level subcategories (no parent) from the same category
-                kwargs["queryset"] = Subcategory.objects.filter(
+                # Get all first-level subcategories for this category
+                first_level_subcats = Subcategory.objects.filter(
                     category=category,
                     parent_subcategory__isnull=True
                 )
+                
+                # Exclude subcategories that have child subcategories (level 3 exists)
+                # Only show subcategories that don't have children OR are already selected
+                subcats_with_children = first_level_subcats.filter(
+                    child_subcategories__isnull=False
+                ).distinct()
+                
+                available_subcats = first_level_subcats.exclude(
+                    pk__in=subcats_with_children.values_list('pk', flat=True)
+                )
+                
+                # If editing existing product, include its current subcategory even if it has children
+                if obj_id:
+                    try:
+                        product = Product.objects.get(pk=obj_id)
+                        if product.subcategory:
+                            available_subcats = available_subcats | Subcategory.objects.filter(pk=product.subcategory.pk)
+                    except Product.DoesNotExist:
+                        pass
+                
+                kwargs["queryset"] = available_subcats
             else:
-                # If no category selected, show all first-level subcategories
-                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
+                # If no category selected, show all first-level subcategories without children
+                first_level_subcats = Subcategory.objects.filter(parent_subcategory__isnull=True)
+                subcats_with_children = first_level_subcats.filter(
+                    child_subcategories__isnull=False
+                ).distinct()
+                kwargs["queryset"] = first_level_subcats.exclude(
+                    pk__in=subcats_with_children.values_list('pk', flat=True)
+                )
         
         elif db_field.name == "second_subcategory":
             # Get the subcategory from the form or existing product
