@@ -254,7 +254,6 @@ class SubcategoryAdmin(admin.ModelAdmin):
             if category:
                 # Only show first-level subcategories (no parent) from the same category
                 # that don't have products (to allow creating level 3)
-                from .models import Product
                 first_level_subcats = Subcategory.objects.filter(
                     category=category,
                     parent_subcategory__isnull=True
@@ -278,7 +277,6 @@ class SubcategoryAdmin(admin.ModelAdmin):
                 kwargs["queryset"] = available_parents
             else:
                 # If no category selected, show all first-level subcategories without products
-                from .models import Product
                 first_level_subcats = Subcategory.objects.filter(parent_subcategory__isnull=True)
                 subcats_with_products = Product.objects.filter(
                     subcategory__in=first_level_subcats,
