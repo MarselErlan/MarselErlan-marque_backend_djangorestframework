@@ -420,33 +420,12 @@ class ProductAdmin(admin.ModelAdmin):
         """Filter subcategories based on selected category and parent relationships"""
         obj_id = request.resolver_match.kwargs.get('object_id')
         
-        # Filter category field: exclude categories that have subcategories (to prevent adding level 1 products if category has subcategories)
+        # Category field: Show all categories - validation will prevent invalid combinations
         if db_field.name == "category":
-            # Get all categories
-            all_categories = Category.objects.all()
-            
-            # Get categories that have subcategories
-            categories_with_subcats = all_categories.filter(
-                subcategories__parent_subcategory__isnull=True
-            ).distinct()
-            
-            # Exclude categories with subcategories, unless editing existing product
-            available_categories = all_categories.exclude(
-                pk__in=categories_with_subcats.values_list('pk', flat=True)
-            )
-            
-            # If editing existing product, include its current category even if it has subcategories
-            if obj_id:
-                try:
-                    product = Product.objects.get(pk=obj_id)
-                    if product.category:
-                        available_categories = available_categories | Category.objects.filter(pk=product.category.pk)
-                except Product.DoesNotExist:
-                    pass
-            
-            kwargs["queryset"] = available_categories
+            # Show all categories - the model validation will enforce the rules
+            kwargs["queryset"] = Category.objects.all()
         
-        # Filter subcategory field: exclude subcategories that have children (to prevent adding products to level 2 that has level 3)
+        # Filter subcategory field: Show subcategories based on selected category
         elif db_field.name == "subcategory":
             # Get category from form data or existing product
             category_id = request.GET.get('category')
@@ -465,41 +444,15 @@ class ProductAdmin(admin.ModelAdmin):
                 category = None
             
             if category:
-                # Get all first-level subcategories for this category
-                first_level_subcats = Subcategory.objects.filter(
+                # Show all first-level subcategories for this category
+                # Model validation will prevent adding products to subcategories with children
+                kwargs["queryset"] = Subcategory.objects.filter(
                     category=category,
                     parent_subcategory__isnull=True
                 )
-                
-                # Exclude subcategories that have child subcategories (level 3 exists)
-                # Only show subcategories that don't have children OR are already selected
-                subcats_with_children = first_level_subcats.filter(
-                    child_subcategories__isnull=False
-                ).distinct()
-                
-                available_subcats = first_level_subcats.exclude(
-                    pk__in=subcats_with_children.values_list('pk', flat=True)
-                )
-                
-                # If editing existing product, include its current subcategory even if it has children
-                if obj_id:
-                    try:
-                        product = Product.objects.get(pk=obj_id)
-                        if product.subcategory:
-                            available_subcats = available_subcats | Subcategory.objects.filter(pk=product.subcategory.pk)
-                    except Product.DoesNotExist:
-                        pass
-                
-                kwargs["queryset"] = available_subcats
             else:
-                # If no category selected, show all first-level subcategories without children
-                first_level_subcats = Subcategory.objects.filter(parent_subcategory__isnull=True)
-                subcats_with_children = first_level_subcats.filter(
-                    child_subcategories__isnull=False
-                ).distinct()
-                kwargs["queryset"] = first_level_subcats.exclude(
-                    pk__in=subcats_with_children.values_list('pk', flat=True)
-                )
+                # If no category selected, show all first-level subcategories
+                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
         
         elif db_field.name == "second_subcategory":
             # Get the subcategory from the form or existing product
