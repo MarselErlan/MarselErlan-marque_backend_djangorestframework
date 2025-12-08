@@ -573,7 +573,7 @@ class SubcategoryProductsView(MarketAwareAPIView):
             products_qs = products_qs.filter(
                 subcategory=subcategory,
                 second_subcategory__isnull=True
-            )
+        )
         
         products_qs = self.apply_market_filter(products_qs, market)
         return category, subcategory, second_subcategory, products_qs
