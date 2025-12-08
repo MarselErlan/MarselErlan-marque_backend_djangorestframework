@@ -417,69 +417,21 @@ class ProductAdmin(admin.ModelAdmin):
         return qs.select_related('category', 'subcategory', 'second_subcategory', 'brand', 'currency')
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        """Filter subcategories based on selected category and parent relationships"""
-        obj_id = request.resolver_match.kwargs.get('object_id')
+        """Show all items from database without any filtering - model validation will enforce rules"""
         
-        # Category field: Show all categories - validation will prevent invalid combinations
+        # Category field: Show all categories from database
         if db_field.name == "category":
-            # Show all categories - the model validation will enforce the rules
             kwargs["queryset"] = Category.objects.all()
         
-        # Filter subcategory field: Show subcategories based on selected category
+        # Subcategory field: Show all first-level subcategories (subcategory_1) from all categories
         elif db_field.name == "subcategory":
-            # Get category from form data or existing product
-            category_id = request.GET.get('category')
-            if obj_id:
-                try:
-                    product = Product.objects.get(pk=obj_id)
-                    category = product.category
-                except Product.DoesNotExist:
-                    category = None
-            elif category_id:
-                try:
-                    category = Category.objects.get(pk=category_id)
-                except Category.DoesNotExist:
-                    category = None
-            else:
-                category = None
-            
-            if category:
-                # Show all first-level subcategories for this category
-                # Model validation will prevent adding products to subcategories with children
-                kwargs["queryset"] = Subcategory.objects.filter(
-                    category=category,
-                    parent_subcategory__isnull=True
-                )
-            else:
-                # If no category selected, show all first-level subcategories
-                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
+            # Show all first-level subcategories (no parent) from all categories
+            kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=True)
         
+        # Second subcategory field: Show all second-level subcategories (subcategory_2) from all categories
         elif db_field.name == "second_subcategory":
-            # Get the subcategory from the form or existing product
-            if obj_id:
-                try:
-                    product = Product.objects.get(pk=obj_id)
-                    subcategory = product.subcategory
-                except Product.DoesNotExist:
-                    subcategory = None
-            else:
-                subcategory_id = request.GET.get('subcategory')
-                if subcategory_id:
-                    try:
-                        subcategory = Subcategory.objects.get(pk=subcategory_id)
-                    except Subcategory.DoesNotExist:
-                        subcategory = None
-                else:
-                    subcategory = None
-            
-            if subcategory:
-                # Only show second-level subcategories that are children of the selected subcategory
-                kwargs["queryset"] = Subcategory.objects.filter(
-                    parent_subcategory=subcategory
-                )
-            else:
-                # If no subcategory selected, show all second-level subcategories
-                kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=False)
+            # Show all second-level subcategories (has parent) from all categories
+            kwargs["queryset"] = Subcategory.objects.filter(parent_subcategory__isnull=False)
         
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
