@@ -1432,6 +1432,9 @@ class ProductBestSellerView(ProductListView):
         # to avoid complex query issues
         queryset = super().get_queryset(request)
         
+        # Filter only best seller products
+        queryset = queryset.filter(is_best_seller=True)
+        
         # Order by sales_count (from model), rating, and created_at
         # The serializer will calculate actual sold_count dynamically
         queryset = queryset.order_by(

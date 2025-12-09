@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from products.models import (
+    Brand,
     Cart,
     Category,
     Product,
@@ -58,11 +59,28 @@ class ProductAPIViewTests(TestCase):
             is_active=True,
         )
 
+        # Create brands
+        cls.brand_marque = Brand.objects.create(
+            name="MARQUE",
+            slug="marque",
+            is_active=True,
+        )
+        cls.brand_sport = Brand.objects.create(
+            name="SPORT",
+            slug="sport",
+            is_active=True,
+        )
+        cls.brand_us = Brand.objects.create(
+            name="US BRAND",
+            slug="us-brand",
+            is_active=True,
+        )
+
         # Products & SKUs
         cls.product = Product.objects.create(
             name="Футболка MARQUE",
             slug="marque-tee",
-            brand="MARQUE",
+            brand=cls.brand_marque,
             description="Дышащая футболка для спорта",
             price=Decimal("2500.00"),
             original_price=Decimal("3000.00"),
@@ -80,7 +98,7 @@ class ProductAPIViewTests(TestCase):
         cls.product_second = Product.objects.create(
             name="Футболка SPORT",
             slug="sport-tee",
-            brand="SPORT",
+            brand=cls.brand_sport,
             description="Футболка для тренировок",
             price=Decimal("3200.00"),
             market="KG",
@@ -95,7 +113,7 @@ class ProductAPIViewTests(TestCase):
         cls.product_other_market = Product.objects.create(
             name="USA Hoodie",
             slug="usa-hoodie",
-            brand="US BRAND",
+            brand=cls.brand_us,
             description="Hoodie for US market",
             price=Decimal("4500.00"),
             market="US",
@@ -401,7 +419,7 @@ class ProductAPIViewTests(TestCase):
         self.assertEqual(len(response.data["items"]), 1)
         wishlist_item = response.data["items"][0]
         self.assertEqual(wishlist_item["product"]["id"], self.product.id)
-        self.assertEqual(wishlist_item["product"]["brand"]["name"], self.product.brand)
+        self.assertEqual(wishlist_item["product"]["brand"]["name"], self.product.brand.name)
         self.assertIn("price_min", wishlist_item["product"])
         self.assertIn("available_sizes", wishlist_item["product"])
 

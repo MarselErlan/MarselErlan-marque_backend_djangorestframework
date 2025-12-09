@@ -8,6 +8,7 @@ from django.test import TestCase
 
 from orders.models import Review
 from products.models import (
+    Brand,
     Category,
     Product,
     ProductFeature,
@@ -43,10 +44,22 @@ class ProductSerializerTests(TestCase):
             is_active=True,
         )
 
+        # Create brands
+        cls.brand_marque = Brand.objects.create(
+            name="MARQUE",
+            slug="marque",
+            is_active=True,
+        )
+        cls.brand_sport = Brand.objects.create(
+            name="SPORT",
+            slug="sport",
+            is_active=True,
+        )
+
         cls.product = Product.objects.create(
             name="Футболка MARQUE",
             slug="marque-tshirt",
-            brand="MARQUE",
+            brand=cls.brand_marque,
             description="Дышащая футболка",
             price=Decimal("2500.00"),
             original_price=Decimal("3000.00"),
@@ -64,7 +77,7 @@ class ProductSerializerTests(TestCase):
         cls.secondary_product = Product.objects.create(
             name="Футболка SPORT",
             slug="sport-tshirt",
-            brand="SPORT",
+            brand=cls.brand_sport,
             description="Спортивная футболка",
             price=Decimal("3500.00"),
             market="KG",
@@ -161,7 +174,7 @@ class ProductSerializerTests(TestCase):
 
         self.assertIn("attributes", data)
         self.assertEqual(data["attributes"]["Материал"], "Хлопок")
-        self.assertEqual(data["attributes"]["Бренд"], "MARQUE")
+        self.assertEqual(data["attributes"]["Бренд"], self.brand_marque.name)
 
         self.assertIn("reviews", data)
         self.assertEqual(len(data["reviews"]), 1)
