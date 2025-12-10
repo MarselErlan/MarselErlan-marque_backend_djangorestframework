@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from users.models import User  # pyright: ignore[reportMissingImports]
 
 
+
 class Currency(models.Model):
     """Currency model for multi-currency support"""
     
@@ -184,7 +185,6 @@ class Subcategory(models.Model):
                     category=self.category,
                     subcategory__isnull=True
                 ).exists()
-                
                 if category_has_level1_products:
                     errors['category'] = (
                         f"Cannot create subcategory under '{self.category.name}' "
@@ -701,7 +701,7 @@ class ProductFeature(models.Model):
         ordering = ['sort_order']
     
     def __str__(self):
-        return f"{self.product.name} - {self.feature_text[:50]}"
+        return f"{self.product.name} - {self.feature_text[:50]}"  # type: ignore
 
 
 class ProductSizeOption(models.Model):

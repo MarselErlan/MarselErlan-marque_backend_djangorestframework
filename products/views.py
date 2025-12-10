@@ -26,11 +26,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import (  # pyright: ignore[reportMissingImports]
     OpenApiParameter,
-    OpenApiTypes,
     OpenApiResponse,
     extend_schema,
     inline_serializer,
 )
+from drf_spectacular.types import OpenApiTypes  # pyright: ignore[reportMissingImports]
 
 from orders.models import Review, Order, OrderItem  # pyright: ignore[reportMissingImports]
 from .models import (
@@ -889,8 +889,8 @@ class ProductImageUploadView(APIView):
         serializer = ImageUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        upload = serializer.validated_data["image"]
-        folder = serializer.validated_data.get("folder") or "products"
+        upload = serializer.validated_data["image"]  # type: ignore
+        folder = serializer.validated_data.get("folder") or "products"  # pyright: ignore[reportGeneralTypeIssues]
 
         # Validate image using Pillow
         try:

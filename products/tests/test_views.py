@@ -193,7 +193,7 @@ class ProductAPIViewTests(TestCase):
         response = self.client.get("/api/v1/products")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
-        self.assertEqual(response["X-Total-Count"], "2")
+        self.assertEqual(response["X-Total-Count"], "2")  # type: ignore
         self.assertEqual(response.data[0]["title"], "Футболка MARQUE")
 
     def test_products_best_sellers_endpoint(self):
