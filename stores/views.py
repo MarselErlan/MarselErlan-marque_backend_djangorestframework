@@ -10,7 +10,12 @@ from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 
 from .models import Store, StoreFollower
-from .serializers import StoreListSerializer, StoreDetailSerializer
+from .serializers import (
+    StoreListSerializer,
+    StoreDetailSerializer,
+    StoreRegistrationSerializer,
+    StoreUpdateSerializer,
+)
 from products.models import Product
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -287,4 +292,109 @@ def store_statistics(request, store_slug):
             'products_count': store.products_count,
             'likes_count': store.likes_count,
         },
+    }, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="Register new store",
+    description="Register a new store (requires authentication). Store will be in 'pending' status until admin approval.",
+    request=StoreRegistrationSerializer,
+    responses={
+        201: StoreDetailSerializer,
+        400: OpenApiResponse(description="Validation error"),
+    },
+    tags=["stores"],
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def store_register(request):
+    """
+    Register a new store.
+    
+    The authenticated user becomes the store owner.
+    Store status will be 'pending' until admin approval.
+    """
+    serializer = StoreRegistrationSerializer(data=request.data, context={'request': request})
+    
+    if serializer.is_valid():
+        store = serializer.save()
+        response_serializer = StoreDetailSerializer(store, context={'request': request})
+        return Response({
+            'success': True,
+            'message': 'Store registered successfully. Pending admin approval.',
+            'store': response_serializer.data,
+        }, status=status.HTTP_201_CREATED)
+    
+    return Response({
+        'success': False,
+        'errors': serializer.errors,
+    }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    summary="Update store",
+    description="Update store information (store owner only)",
+    request=StoreUpdateSerializer,
+    responses={
+        200: StoreDetailSerializer,
+        400: OpenApiResponse(description="Validation error"),
+        403: OpenApiResponse(description="Not store owner"),
+        404: OpenApiResponse(description="Store not found"),
+    },
+    tags=["stores"],
+)
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def store_update(request, store_slug):
+    """
+    Update store information (store owner only).
+    """
+    store = get_object_or_404(Store, slug=store_slug)
+    
+    # Check if user is the store owner
+    if store.owner != request.user:
+        return Response(
+            {'error': 'You are not the owner of this store'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    serializer = StoreUpdateSerializer(store, data=request.data, partial=True, context={'request': request})
+    
+    if serializer.is_valid():
+        serializer.save()
+        response_serializer = StoreDetailSerializer(store, context={'request': request})
+        return Response({
+            'success': True,
+            'message': 'Store updated successfully',
+            'store': response_serializer.data,
+        }, status=status.HTTP_200_OK)
+    
+    return Response({
+        'success': False,
+        'errors': serializer.errors,
+    }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    summary="Get my stores",
+    description="Get list of stores owned by the authenticated user",
+    responses={
+        200: StoreListSerializer(many=True),
+    },
+    tags=["stores"],
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_stores(request):
+    """
+    Get list of stores owned by the authenticated user.
+    """
+    stores = Store.objects.filter(owner=request.user).order_by('-created_at')
+    
+    serializer = StoreListSerializer(stores, many=True, context={'request': request})
+    
+    return Response({
+        'success': True,
+        'stores': serializer.data,
+        'total': stores.count(),
     }, status=status.HTTP_200_OK)

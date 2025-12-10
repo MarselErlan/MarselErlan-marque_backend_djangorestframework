@@ -525,3 +525,128 @@ class StoreViewTests(TestCase):
         response = self.client.get('/api/v1/stores/non-existent-store/statistics/')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    # Store Registration Tests
+    def test_store_register_requires_authentication(self):
+        """Test store registration requires authentication"""
+        response = self.client.post('/api/v1/stores/register/', {
+            'name': 'New Store',
+            'market': 'KG',
+        })
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_store_register_success(self):
+        """Test successful store registration"""
+        self.client.force_authenticate(user=self.user_kg)
+        response = self.client.post('/api/v1/stores/register/', {
+            'name': 'My New Store',
+            'description': 'A new store',
+            'market': 'KG',
+            'email': 'store@example.com',
+            'phone': '+996555111111',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['success'])
+        self.assertIn('store', response.data)
+        self.assertEqual(response.data['store']['name'], 'My New Store')
+        self.assertEqual(response.data['store']['market'], 'KG')
+        self.assertEqual(response.data['store']['status'], 'pending')
+        self.assertEqual(response.data['store']['owner'], self.user_kg.id)
+
+    def test_store_register_validation_error(self):
+        """Test store registration with invalid data"""
+        self.client.force_authenticate(user=self.user_kg)
+        response = self.client.post('/api/v1/stores/register/', {
+            'name': '',  # Empty name
+            'market': 'INVALID',  # Invalid market
+        })
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data['success'])
+        self.assertIn('errors', response.data)
+
+    def test_store_register_missing_required_fields(self):
+        """Test store registration with missing required fields"""
+        self.client.force_authenticate(user=self.user_kg)
+        response = self.client.post('/api/v1/stores/register/', {
+            'description': 'Store without name',
+        })
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # Store Update Tests
+    def test_store_update_requires_authentication(self):
+        """Test store update requires authentication"""
+        response = self.client.put(f'/api/v1/stores/{self.store_kg.slug}/update/', {
+            'name': 'Updated Name',
+        })
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_store_update_requires_ownership(self):
+        """Test store update requires store ownership"""
+        self.client.force_authenticate(user=self.user_kg)
+        response = self.client.put(f'/api/v1/stores/{self.store_kg.slug}/update/', {
+            'name': 'Updated Name',
+        })
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_store_update_success(self):
+        """Test successful store update"""
+        self.client.force_authenticate(user=self.owner_kg)
+        response = self.client.put(f'/api/v1/stores/{self.store_kg.slug}/update/', {
+            'name': 'Updated Store Name',
+            'description': 'Updated description',
+            'email': 'newemail@example.com',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['store']['name'], 'Updated Store Name')
+        self.assertEqual(response.data['store']['description'], 'Updated description')
+        self.assertEqual(response.data['store']['email'], 'newemail@example.com')
+
+    def test_store_update_partial(self):
+        """Test partial store update"""
+        self.client.force_authenticate(user=self.owner_kg)
+        response = self.client.put(f'/api/v1/stores/{self.store_kg.slug}/update/', {
+            'email': 'onlyemail@example.com',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.store_kg.refresh_from_db()
+        self.assertEqual(self.store_kg.email, 'onlyemail@example.com')
+        # Other fields should remain unchanged
+        self.assertEqual(self.store_kg.name, 'Azraud Store')
+
+    def test_store_update_not_found(self):
+        """Test store update with invalid slug"""
+        self.client.force_authenticate(user=self.owner_kg)
+        response = self.client.put('/api/v1/stores/non-existent-store/update/', {
+            'name': 'Updated Name',
+        })
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # My Stores Tests
+    def test_my_stores_requires_authentication(self):
+        """Test my stores requires authentication"""
+        response = self.client.get('/api/v1/stores/my-stores/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_my_stores_success(self):
+        """Test successful my stores retrieval"""
+        self.client.force_authenticate(user=self.owner_kg)
+        response = self.client.get('/api/v1/stores/my-stores/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertIn('stores', response.data)
+        self.assertIn('total', response.data)
+        
+        stores = response.data['stores']
+        store_slugs = [s['slug'] for s in stores]
+        self.assertIn('azraud-store', store_slugs)
+        self.assertIn('global-store', store_slugs)
+        self.assertNotIn('usa-fashion-store', store_slugs)  # Owned by different user
+
+    def test_my_stores_empty(self):
+        """Test my stores for user with no stores"""
+        self.client.force_authenticate(user=self.user_kg)
+        response = self.client.get('/api/v1/stores/my-stores/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total'], 0)
+        self.assertEqual(len(response.data['stores']), 0)
+

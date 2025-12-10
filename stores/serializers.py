@@ -154,3 +154,63 @@ class StoreDetailSerializer(serializers.ModelSerializer):
         """Get owner's full name."""
         return obj.owner.full_name if obj.owner else None
 
+
+class StoreRegistrationSerializer(serializers.ModelSerializer):
+    """Serializer for store registration."""
+    
+    class Meta:
+        model = Store
+        fields = [
+            'name',
+            'description',
+            'market',
+            'email',
+            'phone',
+            'website',
+            'address',
+            'logo_url',
+            'cover_image_url',
+        ]
+        extra_kwargs = {
+            'name': {'required': True},
+            'market': {'required': True},
+        }
+    
+    def validate_market(self, value):
+        """Validate market choice."""
+        if value not in ['KG', 'US', 'ALL']:
+            raise serializers.ValidationError("Market must be KG, US, or ALL")
+        return value
+    
+    def create(self, validated_data):
+        """Create store with current user as owner."""
+        validated_data['owner'] = self.context['request'].user
+        validated_data['status'] = 'pending'  # Requires admin approval
+        return super().create(validated_data)
+
+
+class StoreUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating store information (owner only)."""
+    
+    class Meta:
+        model = Store
+        fields = [
+            'name',
+            'description',
+            'email',
+            'phone',
+            'website',
+            'address',
+            'logo_url',
+            'cover_image_url',
+        ]
+        extra_kwargs = {
+            'name': {'required': False},
+        }
+    
+    def validate_name(self, value):
+        """Validate name is not empty if provided."""
+        if value and len(value.strip()) == 0:
+            raise serializers.ValidationError("Store name cannot be empty")
+        return value
+
