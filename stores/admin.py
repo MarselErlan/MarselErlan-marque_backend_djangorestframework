@@ -5,6 +5,7 @@ Admin configuration for Stores app.
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
+from django.contrib import messages
 from .models import Store, StoreFollower
 
 

@@ -3,11 +3,13 @@ Serializers for Stores app.
 """
 
 from rest_framework import serializers
+from django.utils.text import slugify
 from .models import Store, StoreFollower
+from products.models import Product, Category, Subcategory, Brand, Currency
 
 
 class StoreListSerializer(serializers.ModelSerializer):
-    """Serializer for store list view - minimal data."""
+    """Serializer for listing stores."""
     
     logo_url = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()
@@ -16,35 +18,16 @@ class StoreListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Store
         fields = [
-            'id',
-            'name',
-            'slug',
-            'logo',
-            'logo_url',
-            'cover_image',
-            'cover_image_url',
-            'rating',
-            'reviews_count',
-            'orders_count',
-            'products_count',
-            'likes_count',
-            'is_verified',
-            'is_featured',
-            'market',
-            'is_following',
+            'id', 'name', 'slug', 'logo', 'logo_url', 'cover_image', 'cover_image_url',
+            'rating', 'reviews_count', 'orders_count', 'products_count', 'likes_count',
+            'is_verified', 'is_featured', 'market', 'is_following',
         ]
         read_only_fields = [
-            'id',
-            'slug',
-            'rating',
-            'reviews_count',
-            'orders_count',
-            'products_count',
-            'likes_count',
+            'id', 'slug', 'rating', 'reviews_count', 'orders_count',
+            'products_count', 'likes_count',
         ]
     
     def get_logo_url(self, obj):
-        """Return logo URL if available."""
         if obj.logo:
             request = self.context.get('request')
             if request:
@@ -53,7 +36,6 @@ class StoreListSerializer(serializers.ModelSerializer):
         return obj.logo_url
     
     def get_cover_image_url(self, obj):
-        """Return cover image URL if available."""
         if obj.cover_image:
             request = self.context.get('request')
             if request:
@@ -62,18 +44,14 @@ class StoreListSerializer(serializers.ModelSerializer):
         return obj.cover_image_url
     
     def get_is_following(self, obj):
-        """Check if current user is following this store."""
         request = self.context.get('request')
         if request and hasattr(request, 'user') and request.user.is_authenticated:
-            return StoreFollower.objects.filter(
-                user=request.user,
-                store=obj
-            ).exists()
+            return StoreFollower.objects.filter(user=request.user, store=obj).exists()
         return False
 
 
 class StoreDetailSerializer(serializers.ModelSerializer):
-    """Serializer for store detail view - full data."""
+    """Serializer for store detail view."""
     
     logo_url = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()
@@ -83,47 +61,18 @@ class StoreDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Store
         fields = [
-            'id',
-            'name',
-            'slug',
-            'description',
-            'logo',
-            'logo_url',
-            'cover_image',
-            'cover_image_url',
-            'email',
-            'phone',
-            'website',
-            'address',
-            'rating',
-            'reviews_count',
-            'orders_count',
-            'products_count',
-            'likes_count',
-            'is_verified',
-            'is_featured',
-            'status',
-            'market',
-            'owner',
-            'owner_name',
-            'is_following',
-            'created_at',
-            'updated_at',
+            'id', 'name', 'slug', 'description', 'logo', 'logo_url', 'cover_image',
+            'cover_image_url', 'email', 'phone', 'website', 'address', 'rating',
+            'reviews_count', 'orders_count', 'products_count', 'likes_count',
+            'is_verified', 'is_featured', 'status', 'market', 'owner', 'owner_name',
+            'is_following', 'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id',
-            'slug',
-            'rating',
-            'reviews_count',
-            'orders_count',
-            'products_count',
-            'likes_count',
-            'created_at',
-            'updated_at',
+            'id', 'slug', 'rating', 'reviews_count', 'orders_count',
+            'products_count', 'likes_count', 'created_at', 'updated_at',
         ]
     
     def get_logo_url(self, obj):
-        """Return logo URL if available."""
         if obj.logo:
             request = self.context.get('request')
             if request:
@@ -132,7 +81,6 @@ class StoreDetailSerializer(serializers.ModelSerializer):
         return obj.logo_url
     
     def get_cover_image_url(self, obj):
-        """Return cover image URL if available."""
         if obj.cover_image:
             request = self.context.get('request')
             if request:
@@ -141,17 +89,12 @@ class StoreDetailSerializer(serializers.ModelSerializer):
         return obj.cover_image_url
     
     def get_is_following(self, obj):
-        """Check if current user is following this store."""
         request = self.context.get('request')
         if request and hasattr(request, 'user') and request.user.is_authenticated:
-            return StoreFollower.objects.filter(
-                user=request.user,
-                store=obj
-            ).exists()
+            return StoreFollower.objects.filter(user=request.user, store=obj).exists()
         return False
     
     def get_owner_name(self, obj):
-        """Get owner's full name."""
         return obj.owner.full_name if obj.owner else None
 
 
@@ -160,57 +103,91 @@ class StoreRegistrationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Store
-        fields = [
-            'name',
-            'description',
-            'market',
-            'email',
-            'phone',
-            'website',
-            'address',
-            'logo_url',
-            'cover_image_url',
-        ]
-        extra_kwargs = {
-            'name': {'required': True},
-            'market': {'required': True},
-        }
-    
-    def validate_market(self, value):
-        """Validate market choice."""
-        if value not in ['KG', 'US', 'ALL']:
-            raise serializers.ValidationError("Market must be KG, US, or ALL")
-        return value
+        fields = ['name', 'description', 'market', 'email', 'phone', 'website', 'address']
     
     def create(self, validated_data):
-        """Create store with current user as owner."""
         validated_data['owner'] = self.context['request'].user
-        validated_data['status'] = 'pending'  # Requires admin approval
-        return super().create(validated_data)
+        validated_data['status'] = 'pending'
+        validated_data['is_active'] = False
+        return Store.objects.create(**validated_data)
+    
+    def validate_name(self, value):
+        if Store.objects.filter(name=value).exists():
+            raise serializers.ValidationError("A store with this name already exists.")
+        return value
 
 
 class StoreUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating store information (owner only)."""
+    """Serializer for updating store information."""
     
     class Meta:
         model = Store
         fields = [
-            'name',
-            'description',
-            'email',
-            'phone',
-            'website',
-            'address',
-            'logo_url',
-            'cover_image_url',
+            'name', 'description', 'email', 'phone', 'website', 'address',
+            'logo_url', 'cover_image_url', 'is_active', 'is_featured', 'market'
         ]
-        extra_kwargs = {
-            'name': {'required': False},
-        }
+        read_only_fields = ['market']
     
     def validate_name(self, value):
-        """Validate name is not empty if provided."""
-        if value and len(value.strip()) == 0:
-            raise serializers.ValidationError("Store name cannot be empty")
+        instance = self.instance
+        if instance and instance.name == value:
+            return value
+        if Store.objects.filter(name=value).exists():
+            raise serializers.ValidationError("A store with this name already exists.")
         return value
 
+
+class StoreAdminProductSerializer(serializers.ModelSerializer):
+    """Serializer for store owners to create/update products."""
+    
+    class Meta:
+        model = Product
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'description',
+            'category',
+            'subcategory',
+            'second_subcategory',
+            'brand',
+            'store',
+            'price',
+            'original_price',
+            'discount',
+            'currency',
+            'market',
+            'gender',
+            'in_stock',
+            'is_active',
+            'is_featured',
+            'is_best_seller',
+            'ai_description',
+        ]
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
+    
+    def validate_store(self, value):
+        """Ensure user owns the store"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            if not request.user.is_superuser and value.owner != request.user:
+                raise serializers.ValidationError("You can only create products for your own stores.")
+        return value
+    
+    def validate(self, data):
+        """Validate product data"""
+        # Ensure subcategory belongs to category
+        if data.get('subcategory') and data.get('category'):
+            if data['subcategory'].category != data['category']:
+                raise serializers.ValidationError({
+                    'subcategory': 'Subcategory must belong to the selected category.'
+                })
+        
+        # Ensure second_subcategory belongs to subcategory
+        if data.get('second_subcategory') and data.get('subcategory'):
+            if data['second_subcategory'].parent_subcategory != data['subcategory']:
+                raise serializers.ValidationError({
+                    'second_subcategory': 'Second subcategory must be a child of the first subcategory.'
+                })
+        
+        return data
