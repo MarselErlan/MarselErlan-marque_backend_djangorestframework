@@ -19,8 +19,10 @@ class StoreOwnerProductAdmin(admin.ModelAdmin):
         """Allow store owners to see the Products module in admin"""
         if request.user.is_superuser:
             return True
-        # Store owners with active stores can see this module
-        return request.user.is_staff and request.user.owned_stores.filter(is_active=True).exists()
+        # Store owners with active stores can see and manage products
+        if not request.user.is_staff:
+            return False
+        return request.user.owned_stores.filter(is_active=True).exists()
     
     list_display = (
         'name', 'brand', 'store', 'category', 'subcategory', 'second_subcategory',
@@ -91,6 +93,15 @@ class StoreOwnerProductAdmin(admin.ModelAdmin):
             readonly.append('store')
         
         return readonly
+    
+    def has_add_permission(self, request):
+        """
+        Store owners can add products if they have at least one active store.
+        """
+        if request.user.is_superuser:
+            return True
+        # Store owners can create products if they have active stores
+        return request.user.is_staff and request.user.owned_stores.filter(is_active=True).exists()
     
     def has_change_permission(self, request, obj=None):
         """

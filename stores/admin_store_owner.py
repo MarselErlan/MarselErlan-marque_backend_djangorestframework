@@ -17,11 +17,14 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     """
     
     def has_module_permission(self, request):
-        """Allow store owners to see the Stores module in admin"""
+        """Allow store owners to see the Stores module only if they have stores"""
         if request.user.is_superuser:
             return True
-        # Store owners with active stores can see this module
-        return request.user.is_staff and request.user.owned_stores.filter(is_active=True).exists()
+        # Store owners can only see Stores module if they have at least one active store
+        # If no stores, hide the module completely
+        if not request.user.is_staff:
+            return False
+        return request.user.owned_stores.filter(is_active=True).exists()
     
     list_display = [
         'name',
