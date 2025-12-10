@@ -5,15 +5,15 @@ from .models import (StoreManager, ManagerSettings, RevenueSnapshot,
 
 @admin.register(StoreManager)
 class StoreManagerAdmin(admin.ModelAdmin):
-    list_display = ('user', 'role', 'accessible_markets_display', 'is_active', 'last_login', 'created_at')
-    list_filter = ('role', 'is_active', 'can_manage_kg', 'can_manage_us', 'created_at')
-    search_fields = ('user__phone', 'user__full_name')
+    list_display = ('user', 'store', 'role', 'accessible_markets_display', 'is_active', 'last_login', 'created_at')
+    list_filter = ('role', 'store', 'is_active', 'can_manage_kg', 'can_manage_us', 'created_at')
+    search_fields = ('user__phone', 'user__full_name', 'store__name')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at', 'accessible_markets')
     
     fieldsets = (
         ('Manager Information', {
-            'fields': ('user', 'role', 'is_active', 'last_login')
+            'fields': ('user', 'store', 'role', 'is_active', 'last_login')
         }),
         ('Market Access', {
             'fields': ('can_manage_kg', 'can_manage_us', 'accessible_markets')
@@ -32,6 +32,16 @@ class StoreManagerAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related to avoid N+1 queries"""
+        qs = super().get_queryset(request)
+        try:
+            # Try to use select_related if store field exists
+            return qs.select_related('user', 'store')
+        except Exception:
+            # Fallback if store field doesn't exist (migration not run)
+            return qs.select_related('user')
     
     def accessible_markets_display(self, obj):
         markets = obj.accessible_markets
