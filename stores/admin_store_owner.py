@@ -16,6 +16,13 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     This admin automatically filters stores by owner and adapts based on user type.
     """
     
+    def has_module_permission(self, request):
+        """Allow store owners to see the Stores module in admin"""
+        if request.user.is_superuser:
+            return True
+        # Store owners with active stores can see this module
+        return request.user.is_staff and request.user.owned_stores.filter(is_active=True).exists()
+    
     list_display = [
         'name',
         'slug',

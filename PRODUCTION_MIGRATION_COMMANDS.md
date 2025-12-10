@@ -31,11 +31,16 @@ python manage.py showmigrations store_manager
 
 ## How to Run on Railway
 
-### Method 1: Railway CLI
+### Method 1: Railway Dashboard (Recommended) ⭐
 
-```bash
-railway run python manage.py migrate store_manager
-```
+**⚠️ Important:** `railway run` runs **locally** on your machine, not on Railway's server!
+
+**Correct way:**
+
+1. Go to Railway Dashboard: https://railway.app
+2. Select your project → Your Django service
+3. Click **"Shell"** or **"Terminal"** button
+4. Run: `python manage.py migrate store_manager`
 
 ### Method 2: Railway Dashboard
 
