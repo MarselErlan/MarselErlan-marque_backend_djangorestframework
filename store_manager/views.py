@@ -847,15 +847,23 @@ def revenue_analytics(request):
     # Filter by store if manager is linked to a store
     base_orders_queryset = filter_orders_by_store(base_orders_queryset, manager)
     
-    # Calculate today's revenue from filtered orders
+    # Calculate today's revenue from filtered orders (using net revenue after fees)
     today = timezone.now().date()
     today_orders = base_orders_queryset.filter(order_date__date=today)
     
-    today_total_revenue = sum(order.total_amount for order in today_orders)
+    # Calculate net revenue from order items (store_revenue after fees)
+    from orders.models import OrderItem
+    today_order_items = OrderItem.objects.filter(
+        order__in=today_orders
+    )
+    if manager.store:
+        today_order_items = today_order_items.filter(sku__product__store=manager.store)
+    
+    today_total_revenue = today_order_items.aggregate(total=Sum('store_revenue'))['total'] or Decimal('0.00')
     today_orders_count = today_orders.count()
     today_avg_order = (today_total_revenue / today_orders_count) if today_orders_count > 0 else Decimal('0')
     
-    # Get hourly revenue breakdown from filtered orders
+    # Get hourly revenue breakdown from filtered orders (using net revenue after fees)
     hourly_revenue = []
     for hour in range(24):
         hour_start = timezone.now().replace(hour=hour, minute=0, second=0, microsecond=0)
@@ -864,7 +872,10 @@ def revenue_analytics(request):
             order_date__gte=hour_start,
             order_date__lt=hour_end
         )
-        hour_revenue = sum(order.total_amount for order in hour_orders)
+        hour_order_items = OrderItem.objects.filter(order__in=hour_orders)
+        if manager.store:
+            hour_order_items = hour_order_items.filter(sku__product__store=manager.store)
+        hour_revenue = hour_order_items.aggregate(total=Sum('store_revenue'))['total'] or Decimal('0.00')
         hourly_revenue.append({
             'hour': hour,
             'revenue': str(hour_revenue),
@@ -891,10 +902,13 @@ def revenue_analytics(request):
             'date': formatted_date,
         })
     
-    # Calculate revenue change vs yesterday
+    # Calculate revenue change vs yesterday (using net revenue after fees)
     yesterday = timezone.now().date() - timedelta(days=1)
     yesterday_orders = base_orders_queryset.filter(order_date__date=yesterday)
-    yesterday_total_revenue = sum(order.total_amount for order in yesterday_orders)
+    yesterday_order_items = OrderItem.objects.filter(order__in=yesterday_orders)
+    if manager.store:
+        yesterday_order_items = yesterday_order_items.filter(sku__product__store=manager.store)
+    yesterday_total_revenue = yesterday_order_items.aggregate(total=Sum('store_revenue'))['total'] or Decimal('0.00')
     yesterday_orders_count = yesterday_orders.count()
     yesterday_avg_order = (yesterday_total_revenue / yesterday_orders_count) if yesterday_orders_count > 0 else Decimal('0')
     

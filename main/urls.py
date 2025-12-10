@@ -35,6 +35,7 @@ urlpatterns = [
     path('api/v1/', include('stores.urls')),  # Multi-store marketplace
     path('api/v1/orders/', include('orders.urls')),  # Orders
     path('api/v1/store-manager/', include('store_manager.urls')),  # Store Manager
+    path('api/v1/referral-fees/', include('referral_fee.urls')),  # Referral Fee Management
     path('api/ai/', include('ai_assistant.urls')),  # AI-powered recommendations
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

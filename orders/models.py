@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from decimal import Decimal
 from users.models import User, Address, PaymentMethod
 from products.models import SKU, Product
 import random
@@ -213,7 +214,11 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    """Items in an order"""
+    """Items in an order
+    
+    Note: Referral fees are calculated and stored per item at order creation time.
+    This ensures fees are locked in even if fee configurations change later.
+    """
     
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     sku = models.ForeignKey(SKU, on_delete=models.SET_NULL, null=True)
@@ -230,6 +235,32 @@ class OrderItem(models.Model):
     quantity = models.IntegerField(validators=[MinValueValidator(1)])
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     
+    # Referral fee (snapshot at time of order)
+    referral_fee_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Referral fee percentage applied to this item"
+    )
+    referral_fee_fixed = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Fixed referral fee amount for this item"
+    )
+    referral_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Total referral fee amount for this item (calculated)"
+    )
+    store_revenue = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Net revenue for store after referral fee (subtotal - referral_fee_amount)"
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -245,7 +276,20 @@ class OrderItem(models.Model):
         # Auto-calculate subtotal
         if not self.subtotal:
             self.subtotal = self.price * self.quantity
+        
+        # Auto-calculate store revenue if referral fee is set
+        if self.referral_fee_amount > 0:
+            self.store_revenue = self.subtotal - self.referral_fee_amount
+        elif self.subtotal > 0:
+            # If no fee, store gets full amount
+            self.store_revenue = self.subtotal
+        
         super().save(*args, **kwargs)
+    
+    @property
+    def net_revenue(self):
+        """Get net revenue for store (after fees)"""
+        return self.store_revenue
 
 
 class OrderStatusHistory(models.Model):

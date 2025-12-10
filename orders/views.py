@@ -214,6 +214,26 @@ def create_order(request):
         elif product.image:
             image_url = request.build_absolute_uri(product.image.url) if request else product.image.url
         
+        # Calculate referral fee for this product
+        referral_fee = None
+        referral_fee_amount = Decimal('0.00')
+        referral_fee_percentage = Decimal('0.00')
+        referral_fee_fixed = Decimal('0.00')
+        
+        try:
+            from referral_fee.models import ReferralFee
+            referral_fee = ReferralFee.get_fee_for_product(product)
+            if referral_fee:
+                referral_fee_amount = referral_fee.calculate_fee(item_subtotal)
+                referral_fee_percentage = referral_fee.fee_percentage
+                referral_fee_fixed = referral_fee.fee_fixed
+        except Exception:
+            # If referral_fee app is not available or error occurs, continue without fee
+            pass
+        
+        # Calculate store revenue (after fee deduction)
+        store_revenue = item_subtotal - referral_fee_amount
+        
         OrderItem.objects.create(
             order=order,
             sku=sku,
@@ -225,6 +245,11 @@ def create_order(request):
             quantity=cart_item.quantity,
             subtotal=item_subtotal,  # Store converted subtotal
             image_url=image_url,
+            # Referral fee information
+            referral_fee_percentage=referral_fee_percentage,
+            referral_fee_fixed=referral_fee_fixed,
+            referral_fee_amount=referral_fee_amount,
+            store_revenue=store_revenue,  # Net revenue for store
         )
     
     # Clear cart if use_cart is True
