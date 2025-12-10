@@ -43,7 +43,9 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
         'rating', 'reviews_count', 'orders_count', 'products_count',
         'likes_count', 'created_at', 'updated_at'
     ]
-    prepopulated_fields = {'slug': ('name',)}  # Slug is editable when creating, readonly when editing
+    # Note: prepopulated_fields only works when field is editable
+    # We'll handle slug readonly state dynamically in get_readonly_fields
+    prepopulated_fields = {'slug': ('name',)}
     
     # Admin Actions (for superusers only)
     @admin.action(description='Approve selected stores')
@@ -214,13 +216,13 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
             readonly.append('slug')  # Make slug readonly when editing
         
         return readonly
+    
+    def get_prepopulated_fields(self, request, obj=None):
         """
-        Make owner readonly if editing existing store.
+        Only enable prepopulated_fields when creating (not editing).
+        This prevents KeyError when slug is readonly.
         """
-        readonly = list(self.readonly_fields)
-        
-        if obj:  # Editing existing store
-            readonly.append('owner')
-        
-        return readonly
+        if obj is None:  # Creating new store
+            return self.prepopulated_fields
+        return {}  # Disable prepopulated_fields when editing
 
