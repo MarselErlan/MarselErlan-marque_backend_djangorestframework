@@ -23,6 +23,13 @@ class Order(models.Model):
     - Better query performance (no JOIN needed)
     - Easier manager filtering
     - Consistent architecture with Product/Category/Banner
+    
+    Store Relationship:
+    - Orders are linked to stores through OrderItem -> SKU -> Product -> Store
+    - An order can contain products from multiple stores
+    - Store managers see orders that contain products from their store
+    - Use get_stores() method to get all stores in an order
+    - Use has_store_products(store) to check if order has products from a specific store
     """
     
     STATUS_CHOICES = [
@@ -175,6 +182,34 @@ class Order(models.Model):
     def can_cancel(self):
         """Check if order can be cancelled"""
         return self.status in ['pending', 'confirmed']
+    
+    def get_stores(self):
+        """Get all stores associated with this order through products.
+        
+        Returns:
+            QuerySet of Store objects that have products in this order.
+        """
+        from stores.models import Store
+        # Get unique stores from order items
+        store_ids = self.items.filter(
+            sku__product__store__isnull=False
+        ).values_list('sku__product__store', flat=True).distinct()
+        
+        return Store.objects.filter(id__in=store_ids)
+    
+    def has_store_products(self, store):
+        """Check if order contains products from a specific store.
+        
+        Args:
+            store: Store instance or store ID
+            
+        Returns:
+            bool: True if order has products from the store
+        """
+        store_id = store.id if hasattr(store, 'id') else store
+        return self.items.filter(
+            sku__product__store_id=store_id
+        ).exists()
 
 
 class OrderItem(models.Model):

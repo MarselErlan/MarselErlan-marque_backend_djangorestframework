@@ -465,7 +465,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
             return None
         
         store = obj.store
-        request = self.context.get('request') if hasattr(self, 'context') else None
+        request = self.context.get('request') if self.context else None
         
         logo_url = None
         if store.logo:

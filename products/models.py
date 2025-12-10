@@ -331,9 +331,7 @@ class Product(models.Model):
         'stores.Store',
         on_delete=models.CASCADE,
         related_name='products',
-        null=True,
-        blank=True,
-        help_text="Store that sells this product (for marketplace)"
+        help_text="Store that sells this product (required for marketplace)"
     )
     description = models.TextField(null=True, blank=True)
     

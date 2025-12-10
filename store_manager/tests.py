@@ -13,6 +13,7 @@ from users.models import User
 from orders.models import Order, OrderItem
 from products.models import Product, Category, Subcategory, Brand, SKU, ProductSizeOption, ProductColorOption, Currency
 from store_manager.models import StoreManager, ManagerSettings, RevenueSnapshot
+from stores.models import Store
 
 
 class StoreManagerViewTests(TestCase):
@@ -116,12 +117,31 @@ class StoreManagerViewTests(TestCase):
             slug="test-brand",
             is_active=True,
         )
+        
+        # Create store
+        cls.store_owner = User.objects.create(
+            phone='+996555000002',
+            full_name='Store Owner',
+            location='KG',
+            is_active=True,
+        )
+        
+        cls.store = Store.objects.create(
+            name='Test Store',
+            owner=cls.store_owner,
+            market='KG',
+            status='active',
+            is_active=True,
+        )
+        
         cls.product = Product.objects.create(
             name="Test Product",
             slug="test-product",
             brand=cls.brand,
+            store=cls.store,
             category=cls.category,
             price=Decimal("1000.00"),
+            currency=cls.currency_kgs,
             market="KG",
             in_stock=True,
             is_active=True,

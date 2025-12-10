@@ -32,9 +32,28 @@ from drf_spectacular.types import OpenApiTypes
 def get_manager(request):
     """Get StoreManager instance from request user"""
     try:
-        return StoreManager.objects.get(user=request.user, is_active=True)
+        return StoreManager.objects.select_related('store').get(user=request.user, is_active=True)
     except StoreManager.DoesNotExist:
-        return None
+        # Check if user is a store owner - auto-create manager for store owners
+        from stores.models import Store
+        try:
+            store = Store.objects.get(owner=request.user, is_active=True)
+            # Auto-create manager for store owner
+            manager = StoreManager.objects.create(
+                user=request.user,
+                store=store,
+                role='manager',
+                can_manage_kg=True if store.market in ['KG', 'ALL'] else False,
+                can_manage_us=True if store.market in ['US', 'ALL'] else False,
+                can_view_orders=True,
+                can_edit_orders=True,
+                can_cancel_orders=True,
+                can_view_revenue=True,
+                is_active=True,
+            )
+            return manager
+        except Store.DoesNotExist:
+            return None
 
 
 # Helper function to check manager permissions
@@ -60,6 +79,28 @@ def check_manager_permission(manager, market, permission_type):
         return False
     
     return True
+
+
+# Helper function to check if order belongs to manager's store
+def check_order_store_access(manager, order):
+    """Check if order belongs to manager's store"""
+    if not manager or not manager.store:
+        return True  # Platform-wide managers can access all orders
+    
+    # Check if order contains products from manager's store
+    return order.items.filter(
+        sku__product__store=manager.store
+    ).exists()
+
+
+# Helper function to filter orders by store
+def filter_orders_by_store(queryset, manager):
+    """Filter orders queryset by manager's store"""
+    if manager and manager.store:
+        return queryset.filter(
+            items__sku__product__store=manager.store
+        ).distinct()
+    return queryset
 
 
 # Helper function to map backend status to frontend display
@@ -260,17 +301,24 @@ def dashboard_stats(request):
     # Calculate time 24 hours ago
     twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
     
+    # Base queryset - filter by market
+    base_queryset = Order.objects.filter(market=market)
+    
+    # Filter by store if manager is linked to a store
+    base_queryset = filter_orders_by_store(base_queryset, manager)
+    
     # Get today's orders count (last 24 hours)
-    today_orders = Order.objects.filter(
-        market=market,
+    today_orders = base_queryset.filter(
         order_date__gte=twenty_four_hours_ago
     ).count()
     
     # Get all orders count
-    all_orders = Order.objects.filter(market=market).count()
+    all_orders = base_queryset.count()
     
-    # Get active orders count
-    active_orders = get_active_orders_count(market)
+    # Get active orders count (filtered by store if applicable)
+    active_orders = base_queryset.filter(
+        status__in=['pending', 'confirmed', 'processing', 'shipped']
+    ).count()
     
     # Get total users count for this market
     from users.models import User
@@ -334,10 +382,13 @@ def orders_list(request):
     limit = int(request.query_params.get('limit', 20))
     offset = int(request.query_params.get('offset', 0))
     
-    # Base queryset
+    # Base queryset - filter by market
     queryset = Order.objects.filter(market=market).select_related(
         'shipping_address', 'payment_method_used'
-    ).prefetch_related('items').order_by('-order_date')
+    ).prefetch_related('items__sku__product__store').order_by('-order_date')
+    
+    # Filter by store if manager is linked to a store
+    queryset = filter_orders_by_store(queryset, manager)
     
     # Apply status filter
     statuses = map_status_filter(status_filter)
@@ -370,16 +421,20 @@ def orders_list(request):
     for i, order_data in enumerate(serializer.data):
         order_obj = orders_list[i] if i < len(orders_list) else None
         if order_obj:
-            order_data['status_display'] = get_status_display(order_obj.status)
-            order_data['status_color'] = get_status_color(order_obj.status)
+            # Create a mutable copy of order_data
+            order_dict = dict(order_data)
+            order_dict['status_display'] = get_status_display(order_obj.status)
+            order_dict['status_color'] = get_status_color(order_obj.status)
             # Format date
-            if order_data.get('order_date'):
-                order_date = datetime.fromisoformat(order_data['order_date'].replace('Z', '+00:00'))
-                order_data['date'] = order_date.strftime('%d.%m.%Y')
-                order_data['order_date_formatted'] = order_date.strftime('%d.%m.%Y, %H:%M')
+            if order_dict.get('order_date'):
+                order_date = datetime.fromisoformat(order_dict['order_date'].replace('Z', '+00:00'))
+                order_dict['date'] = order_date.strftime('%d.%m.%Y')
+                order_dict['order_date_formatted'] = order_date.strftime('%d.%m.%Y, %H:%M')
             # Format amount
-            order_data['amount'] = f"{order_data['total_amount']} {order_data.get('currency', 'сом')}"
-        orders_data.append(order_data)
+            order_dict['amount'] = f"{order_dict.get('total_amount', 0)} {order_dict.get('currency', 'сом')}"
+            orders_data.append(order_dict)
+        else:
+            orders_data.append(order_data)
     
     return Response({
         'success': True,
@@ -429,6 +484,13 @@ def order_detail(request, order_id):
     if not check_manager_permission(manager, order.market, 'view_orders'):
         return Response(
             {'error': 'No permission to view orders for this market'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if order belongs to manager's store
+    if not check_order_store_access(manager, order):
+        return Response(
+            {'error': 'Order does not belong to your store'},
             status=status.HTTP_403_FORBIDDEN
         )
     
@@ -503,6 +565,13 @@ def update_order_status(request, order_id):
     if not check_manager_permission(manager, order.market, 'edit_orders'):
         return Response(
             {'error': 'No permission to edit orders for this market'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if order belongs to manager's store
+    if not check_order_store_access(manager, order):
+        return Response(
+            {'error': 'Order does not belong to your store'},
             status=status.HTTP_403_FORBIDDEN
         )
     
@@ -585,7 +654,7 @@ def cancel_order(request, order_id):
         )
     
     try:
-        order = Order.objects.get(id=order_id)
+        order = Order.objects.prefetch_related('items__sku__product__store').get(id=order_id)
     except Order.DoesNotExist:
         return Response(
             {'error': 'Order not found'},
@@ -596,6 +665,13 @@ def cancel_order(request, order_id):
     if not check_manager_permission(manager, order.market, 'cancel_orders'):
         return Response(
             {'error': 'No permission to cancel orders for this market'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if order belongs to manager's store
+    if not check_order_store_access(manager, order):
+        return Response(
+            {'error': 'Order does not belong to your store'},
             status=status.HTTP_403_FORBIDDEN
         )
     
@@ -661,7 +737,7 @@ def resume_order(request, order_id):
         )
     
     try:
-        order = Order.objects.get(id=order_id)
+        order = Order.objects.prefetch_related('items__sku__product__store').get(id=order_id)
     except Order.DoesNotExist:
         return Response(
             {'error': 'Order not found'},
@@ -672,6 +748,13 @@ def resume_order(request, order_id):
     if not check_manager_permission(manager, order.market, 'edit_orders'):
         return Response(
             {'error': 'No permission to edit orders for this market'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if order belongs to manager's store
+    if not check_order_store_access(manager, order):
+        return Response(
+            {'error': 'Order does not belong to your store'},
             status=status.HTTP_403_FORBIDDEN
         )
     
@@ -758,17 +841,37 @@ def revenue_analytics(request):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    # Ensure today's revenue snapshot exists
-    create_or_update_revenue_snapshot(market=market, snapshot_type='daily')
+    # Base queryset for orders - filter by market
+    base_orders_queryset = Order.objects.filter(market=market)
     
-    # Get today's revenue data
-    today_revenue = get_today_revenue(market)
+    # Filter by store if manager is linked to a store
+    base_orders_queryset = filter_orders_by_store(base_orders_queryset, manager)
     
-    # Get hourly revenue breakdown
-    hourly_revenue = get_hourly_revenue(market)
+    # Calculate today's revenue from filtered orders
+    today = timezone.now().date()
+    today_orders = base_orders_queryset.filter(order_date__date=today)
     
-    # Get recent orders (last 10)
-    recent_orders_qs = get_recent_orders(market, limit=10)
+    today_total_revenue = sum(order.total_amount for order in today_orders)
+    today_orders_count = today_orders.count()
+    today_avg_order = (today_total_revenue / today_orders_count) if today_orders_count > 0 else Decimal('0')
+    
+    # Get hourly revenue breakdown from filtered orders
+    hourly_revenue = []
+    for hour in range(24):
+        hour_start = timezone.now().replace(hour=hour, minute=0, second=0, microsecond=0)
+        hour_end = hour_start + timedelta(hours=1)
+        hour_orders = base_orders_queryset.filter(
+            order_date__gte=hour_start,
+            order_date__lt=hour_end
+        )
+        hour_revenue = sum(order.total_amount for order in hour_orders)
+        hourly_revenue.append({
+            'hour': hour,
+            'revenue': str(hour_revenue),
+        })
+    
+    # Get recent orders (last 10) from filtered queryset
+    recent_orders_qs = base_orders_queryset.order_by('-order_date')[:10]
     recent_orders = []
     for order in recent_orders_qs:
         order_date = order.order_date
@@ -788,46 +891,40 @@ def revenue_analytics(request):
             'date': formatted_date,
         })
     
-    # Calculate revenue change
+    # Calculate revenue change vs yesterday
     yesterday = timezone.now().date() - timedelta(days=1)
-    yesterday_snapshot = RevenueSnapshot.objects.filter(
-        market=market,
-        snapshot_type='daily',
-        snapshot_date=yesterday
-    ).first()
-    
-    # Get today's revenue as Decimal
-    today_revenue_decimal = Decimal(today_revenue.get('total_revenue', '0'))
-    today_avg_decimal = Decimal(today_revenue.get('average_order', '0'))
+    yesterday_orders = base_orders_queryset.filter(order_date__date=yesterday)
+    yesterday_total_revenue = sum(order.total_amount for order in yesterday_orders)
+    yesterday_orders_count = yesterday_orders.count()
+    yesterday_avg_order = (yesterday_total_revenue / yesterday_orders_count) if yesterday_orders_count > 0 else Decimal('0')
     
     revenue_change = "+0% чем вчера"
-    if yesterday_snapshot and yesterday_snapshot.total_revenue > 0:
-        change_percent = ((today_revenue_decimal - yesterday_snapshot.total_revenue) / yesterday_snapshot.total_revenue) * 100
+    if yesterday_total_revenue > 0:
+        change_percent = ((today_total_revenue - yesterday_total_revenue) / yesterday_total_revenue) * 100
         if change_percent > 0:
             revenue_change = f"+{change_percent:.0f}% чем вчера"
         else:
             revenue_change = f"{change_percent:.0f}% чем вчера"
-    elif yesterday_snapshot and yesterday_snapshot.total_revenue == 0 and today_revenue_decimal > 0:
+    elif yesterday_total_revenue == 0 and today_total_revenue > 0:
         revenue_change = "+100% чем вчера"
     
     # Calculate orders change
     orders_change = "0 чем вчера"
-    if yesterday_snapshot:
-        orders_diff = today_revenue['total_orders'] - yesterday_snapshot.total_orders
-        if orders_diff > 0:
-            orders_change = f"+{orders_diff} чем вчера"
-        elif orders_diff < 0:
-            orders_change = f"{orders_diff} чем вчера"
+    orders_diff = today_orders_count - yesterday_orders_count
+    if orders_diff > 0:
+        orders_change = f"+{orders_diff} чем вчера"
+    elif orders_diff < 0:
+        orders_change = f"{orders_diff} чем вчера"
     
     # Calculate average change
     average_change = "+0% чем вчера"
-    if yesterday_snapshot and yesterday_snapshot.average_order_value > 0:
-        avg_change_percent = ((today_avg_decimal - yesterday_snapshot.average_order_value) / yesterday_snapshot.average_order_value) * 100
+    if yesterday_avg_order > 0:
+        avg_change_percent = ((today_avg_order - yesterday_avg_order) / yesterday_avg_order) * 100
         if avg_change_percent > 0:
             average_change = f"+{avg_change_percent:.0f}% чем вчера"
         else:
             average_change = f"{avg_change_percent:.0f}% чем вчера"
-    elif yesterday_snapshot and yesterday_snapshot.average_order_value == 0 and today_avg_decimal > 0:
+    elif yesterday_avg_order == 0 and today_avg_order > 0:
         average_change = "+100% чем вчера"
     
     # Get currency info
@@ -836,11 +933,11 @@ def revenue_analytics(request):
     
     return Response({
         'success': True,
-        'total_revenue': f"{today_revenue['total_revenue']} {currency_code}",
+        'total_revenue': f"{today_total_revenue} {currency_code}",
         'revenue_change': revenue_change,
-        'total_orders': today_revenue['total_orders'],
+        'total_orders': today_orders_count,
         'orders_change': orders_change,
-        'average_order': f"{today_revenue['average_order']} {currency_code}",
+        'average_order': f"{today_avg_order} {currency_code}",
         'average_change': average_change,
         'currency': currency,
         'currency_code': currency_code,

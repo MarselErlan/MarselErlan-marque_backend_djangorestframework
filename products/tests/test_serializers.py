@@ -16,12 +16,14 @@ from products.models import (
     ProductColorOption,
     SKU,
     Subcategory,
+    Currency,
 )
 from products.serializers import (
     ProductDetailSerializer,
     ProductListSerializer,
 )
 from users.models import User
+from stores.models import Store
 
 
 class ProductSerializerTests(TestCase):
@@ -55,11 +57,38 @@ class ProductSerializerTests(TestCase):
             slug="sport",
             is_active=True,
         )
+        
+        # Create store
+        cls.store_owner = User.objects.create(
+            phone='+996555000003',
+            full_name='Store Owner',
+            location='KG',
+            is_active=True,
+        )
+        
+        cls.store = Store.objects.create(
+            name='Test Store',
+            owner=cls.store_owner,
+            market='KG',
+            status='active',
+            is_active=True,
+        )
+        
+        # Create currency
+        cls.currency = Currency.objects.create(
+            code='KGS',
+            name='Kyrgyzstani Som',
+            symbol='сом',
+            exchange_rate=1.0,
+            is_base=True,
+            market='KG',
+        )
 
         cls.product = Product.objects.create(
             name="Футболка MARQUE",
             slug="marque-tshirt",
             brand=cls.brand_marque,
+            store=cls.store,
             description="Дышащая футболка",
             price=Decimal("2500.00"),
             original_price=Decimal("3000.00"),
@@ -67,6 +96,7 @@ class ProductSerializerTests(TestCase):
             market="KG",
             category=cls.category,
             subcategory=cls.subcategory,
+            currency=cls.currency,
             rating=Decimal("4.5"),
             reviews_count=2,
             sales_count=120,
@@ -78,11 +108,13 @@ class ProductSerializerTests(TestCase):
             name="Футболка SPORT",
             slug="sport-tshirt",
             brand=cls.brand_sport,
+            store=cls.store,
             description="Спортивная футболка",
             price=Decimal("3500.00"),
             market="KG",
             category=cls.category,
             subcategory=cls.subcategory,
+            currency=cls.currency,
             rating=Decimal("4.0"),
             reviews_count=1,
             sales_count=80,

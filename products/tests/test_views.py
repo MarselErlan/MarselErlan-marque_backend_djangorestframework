@@ -21,8 +21,10 @@ from products.models import (
     SKU,
     Subcategory,
     Wishlist,
+    Currency,
 )
 from users.models import User
+from stores.models import Store
 
 
 class ProductAPIViewTests(TestCase):
@@ -76,11 +78,62 @@ class ProductAPIViewTests(TestCase):
             is_active=True,
         )
 
+        # Create stores
+        cls.store_owner = User.objects.create(
+            phone='+996555000000',
+            full_name='Store Owner',
+            location='KG',
+            is_active=True,
+        )
+        
+        cls.store_kg = Store.objects.create(
+            name='Test Store KG',
+            owner=cls.store_owner,
+            market='KG',
+            status='active',
+            is_active=True,
+        )
+        
+        cls.store_us_owner = User.objects.create(
+            phone='+1555000000',
+            full_name='US Store Owner',
+            location='US',
+            is_active=True,
+        )
+        
+        cls.store_us = Store.objects.create(
+            name='Test Store US',
+            owner=cls.store_us_owner,
+            market='US',
+            status='active',
+            is_active=True,
+        )
+        
+        # Create currency
+        cls.currency_kg = Currency.objects.create(
+            code='KGS',
+            name='Kyrgyzstani Som',
+            symbol='сом',
+            exchange_rate=1.0,
+            is_base=True,
+            market='KG',
+        )
+        
+        cls.currency_us = Currency.objects.create(
+            code='USD',
+            name='US Dollar',
+            symbol='$',
+            exchange_rate=89.5,
+            is_base=False,
+            market='US',
+        )
+
         # Products & SKUs
         cls.product = Product.objects.create(
             name="Футболка MARQUE",
             slug="marque-tee",
             brand=cls.brand_marque,
+            store=cls.store_kg,
             description="Дышащая футболка для спорта",
             price=Decimal("2500.00"),
             original_price=Decimal("3000.00"),
@@ -88,6 +141,7 @@ class ProductAPIViewTests(TestCase):
             market="KG",
             category=cls.category,
             subcategory=cls.subcategory,
+            currency=cls.currency_kg,
             rating=Decimal("4.6"),
             reviews_count=2,
             sales_count=150,
@@ -99,11 +153,13 @@ class ProductAPIViewTests(TestCase):
             name="Футболка SPORT",
             slug="sport-tee",
             brand=cls.brand_sport,
+            store=cls.store_kg,
             description="Футболка для тренировок",
             price=Decimal("3200.00"),
             market="KG",
             category=cls.category,
             subcategory=cls.subcategory,
+            currency=cls.currency_kg,
             rating=Decimal("4.1"),
             reviews_count=1,
             sales_count=90,
@@ -114,11 +170,13 @@ class ProductAPIViewTests(TestCase):
             name="USA Hoodie",
             slug="usa-hoodie",
             brand=cls.brand_us,
+            store=cls.store_us,
             description="Hoodie for US market",
             price=Decimal("4500.00"),
             market="US",
             category=cls.other_category,
             subcategory=None,
+            currency=cls.currency_us,
             rating=Decimal("4.0"),
             reviews_count=0,
             sales_count=10,

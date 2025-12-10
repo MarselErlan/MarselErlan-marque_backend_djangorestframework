@@ -5,7 +5,10 @@ from django.core.validators import MinValueValidator
 
 
 class StoreManager(models.Model):
-    """Store Manager/Admin - Special role for managing orders and analytics"""
+    """Store Manager/Admin - Special role for managing orders and analytics
+    
+    Now linked to Store - store owners manage their own stores.
+    """
     
     MANAGER_ROLE_CHOICES = [
         ('admin', 'Admin'),  # Full access
@@ -14,6 +17,14 @@ class StoreManager(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='manager_profile')
+    store = models.ForeignKey(
+        'stores.Store',
+        on_delete=models.CASCADE,
+        related_name='managers',
+        null=True,
+        blank=True,
+        help_text="Store this manager manages (null for platform-wide managers)"
+    )
     role = models.CharField(max_length=20, choices=MANAGER_ROLE_CHOICES, default='manager')
     
     # Market management - Which markets this manager can access
