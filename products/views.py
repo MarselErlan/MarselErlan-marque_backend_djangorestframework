@@ -244,7 +244,7 @@ class MarketAwareAPIView(APIView):
         )
         return (
             Product.objects.filter(is_active=True)
-            .select_related("category", "subcategory")
+            .select_related("category", "subcategory", "store", "brand")
             .prefetch_related(
                 "images",
                 sku_prefetch,

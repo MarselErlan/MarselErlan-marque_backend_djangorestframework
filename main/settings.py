@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'orders',
     'banners',
     'store_manager',
+    'stores',  # Multi-store marketplace
     'ai_assistant',  # AI-powered product recommendations
 
     'drf_spectacular',

@@ -327,6 +327,14 @@ class Product(models.Model):
         blank=True,
         help_text="Product brand"
     )
+    store = models.ForeignKey(
+        'stores.Store',
+        on_delete=models.CASCADE,
+        related_name='products',
+        null=True,
+        blank=True,
+        help_text="Store that sells this product (for marketplace)"
+    )
     description = models.TextField(null=True, blank=True)
     
     # Market
@@ -470,6 +478,7 @@ class Product(models.Model):
             models.Index(fields=['is_active', 'in_stock']),
             models.Index(fields=['-sales_count']),
             models.Index(fields=['gender', 'market']),  # For AI gender-based filtering
+            models.Index(fields=['store', 'is_active']),  # For store filtering
         ]
     
     def __str__(self):

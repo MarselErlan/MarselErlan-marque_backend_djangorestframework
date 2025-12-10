@@ -419,6 +419,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
     subcategory = SubcategorySummarySerializer(read_only=True)
     second_subcategory = SubcategorySummarySerializer(read_only=True)
     currency = serializers.SerializerMethodField()
+    store = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -449,6 +450,7 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
             "is_featured",
             "is_best_seller",
             "currency",
+            "store",
         )
     
     def get_currency(self, obj: Product):
@@ -456,6 +458,30 @@ class ProductListSerializer(ProductSerializerMixin, serializers.ModelSerializer)
         if currency:
             return CurrencySerializer(currency).data
         return None
+    
+    def get_store(self, obj: Product) -> Optional[Dict]:
+        """Return store information if product belongs to a store."""
+        if not obj.store:
+            return None
+        
+        store = obj.store
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        
+        logo_url = None
+        if store.logo:
+            logo_url = request.build_absolute_uri(store.logo.url) if request else store.logo.url
+        elif store.logo_url:
+            logo_url = store.logo_url
+        
+        return {
+            'id': store.id,
+            'name': store.name,
+            'slug': store.slug,
+            'logo': logo_url,
+            'rating': float(store.rating),
+            'reviews_count': store.reviews_count,
+            'is_verified': store.is_verified,
+        }
 
     def get_brand(self, obj: Product) -> Dict[str, Optional[str]]:
         return self._brand_payload(obj)
