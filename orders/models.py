@@ -254,11 +254,20 @@ class OrderItem(models.Model):
         default=Decimal('0.00'),
         help_text="Total referral fee amount for this item (calculated)"
     )
+    
+    # Delivery fee (snapshot at time of order)
+    delivery_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Delivery fee amount for this item (based on product category)"
+    )
+    
     store_revenue = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal('0.00'),
-        help_text="Net revenue for store after referral fee (subtotal - referral_fee_amount)"
+        help_text="Net revenue for store after referral fee (subtotal - referral_fee_amount). Note: Delivery fees are kept by platform, not deducted from store revenue."
     )
     
     # Timestamps
@@ -278,10 +287,11 @@ class OrderItem(models.Model):
             self.subtotal = self.price * self.quantity
         
         # Auto-calculate store revenue if referral fee is set
+        # Note: Delivery fees are NOT deducted from store_revenue (they are kept by platform)
         if self.referral_fee_amount > 0:
             self.store_revenue = self.subtotal - self.referral_fee_amount
         elif self.subtotal > 0:
-            # If no fee, store gets full amount
+            # If no referral fee, store gets full product amount
             self.store_revenue = self.subtotal
         
         super().save(*args, **kwargs)

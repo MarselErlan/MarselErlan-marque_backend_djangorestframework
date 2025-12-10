@@ -1,14 +1,14 @@
 """
-Admin configuration for Referral Fee app.
+Admin configuration for Delivery Fee app.
 """
 
 from django.contrib import admin
-from .models import ReferralFee
+from .models import DeliveryFee
 
 
-@admin.register(ReferralFee)
-class ReferralFeeAdmin(admin.ModelAdmin):
-    """Admin interface for ReferralFee model."""
+@admin.register(DeliveryFee)
+class DeliveryFeeAdmin(admin.ModelAdmin):
+    """Admin interface for DeliveryFee model."""
     
     list_display = [
         'fee_path',
@@ -41,8 +41,8 @@ class ReferralFeeAdmin(admin.ModelAdmin):
             'description': 'Set fee based on category structure. More specific (with more levels) takes precedence.'
         }),
         ('Fee Configuration', {
-            'fields': ('fee_percentage', 'fee_fixed', 'description'),
-            'description': 'Fee can be percentage-based, fixed, or both.'
+            'fields': ('fee_amount', 'description'),
+            'description': 'Delivery fee amount for products in this category structure.'
         }),
         ('Status', {
             'fields': ('is_active',)
@@ -74,12 +74,6 @@ class ReferralFeeAdmin(admin.ModelAdmin):
     
     def fee_display(self, obj):
         """Display fee in a readable format"""
-        parts = []
-        if obj.fee_percentage > 0:
-            parts.append(f"{obj.fee_percentage}%")
-        if obj.fee_fixed > 0:
-            parts.append(f"${obj.fee_fixed}")
-        if not parts:
-            return "No fee"
-        return " + ".join(parts)
-    fee_display.short_description = 'Fee'
+        return f"${obj.fee_amount}" if obj.fee_amount > 0 else "No fee"
+    fee_display.short_description = 'Delivery Fee'
+    fee_display.admin_order_field = 'fee_amount'

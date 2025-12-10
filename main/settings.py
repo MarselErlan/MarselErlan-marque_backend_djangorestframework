@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'stores',  # Multi-store marketplace
     'ai_assistant',  # AI-powered product recommendations
     'referral_fee',  # Marketplace fee management
+    'delivery_fee',  # Delivery fee management
 
     'drf_spectacular',
     'drf_spectacular_sidecar',

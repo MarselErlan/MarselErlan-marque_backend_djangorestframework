@@ -123,6 +123,7 @@ def create_order(request):
     
     # Calculate subtotal from cart items (convert to target currency)
     subtotal = Decimal('0.00')
+    
     for cart_item in cart_items:
         sku = cart_item.sku
         # Get SKU's currency
@@ -153,11 +154,39 @@ def create_order(request):
         shipping_cost = shipping_cost_kgs
     
     tax = validated_data.get('tax', Decimal('0.00'))
+    # Note: Delivery fees are calculated per item and added to order total
+    # They will be calculated and stored in OrderItem creation loop below
     total_amount = subtotal + shipping_cost + tax
     
     # Set currency for order
     currency = currency_symbol
     currency_code = target_currency_code
+    
+    # Calculate total delivery fees from all items (will be added to total_amount)
+    total_delivery_fee = Decimal('0.00')
+    
+    # First pass: calculate delivery fees for all items
+    for cart_item in cart_items:
+        product = cart_item.sku.product
+        sku_currency = cart_item.sku.get_currency()
+        sku_currency_code = sku_currency.code if sku_currency else 'KGS'
+        
+        try:
+            from delivery_fee.models import DeliveryFee
+            delivery_fee = DeliveryFee.get_fee_for_product(product)
+            if delivery_fee:
+                # Convert delivery fee to target currency if needed
+                delivery_fee_base = delivery_fee.fee_amount
+                if sku_currency_code != target_currency_code:
+                    delivery_fee_converted = Decimal(str(convert_currency(float(delivery_fee_base), sku_currency_code, target_currency_code)))
+                else:
+                    delivery_fee_converted = delivery_fee_base
+                total_delivery_fee += delivery_fee_converted
+        except Exception:
+            pass
+    
+    # Add delivery fees to total amount
+    total_amount = subtotal + shipping_cost + tax + total_delivery_fee
     
     # Create order
     order = Order.objects.create(
@@ -231,7 +260,19 @@ def create_order(request):
             # If referral_fee app is not available or error occurs, continue without fee
             pass
         
-        # Calculate store revenue (after fee deduction)
+        # Calculate delivery fee for this product
+        delivery_fee_amount = Decimal('0.00')
+        try:
+            from delivery_fee.models import DeliveryFee
+            delivery_fee = DeliveryFee.get_fee_for_product(product)
+            if delivery_fee:
+                delivery_fee_amount = delivery_fee.fee_amount
+        except Exception:
+            # If delivery_fee app is not available or error occurs, continue without fee
+            pass
+        
+        # Calculate store revenue (after referral fee deduction only)
+        # Note: Delivery fees are kept by platform, NOT deducted from store revenue
         store_revenue = item_subtotal - referral_fee_amount
         
         OrderItem.objects.create(
@@ -249,6 +290,8 @@ def create_order(request):
             referral_fee_percentage=referral_fee_percentage,
             referral_fee_fixed=referral_fee_fixed,
             referral_fee_amount=referral_fee_amount,
+            # Delivery fee information
+            delivery_fee_amount=delivery_fee_amount,
             store_revenue=store_revenue,  # Net revenue for store
         )
     

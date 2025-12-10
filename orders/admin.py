@@ -5,8 +5,8 @@ from .models import Order, OrderItem, OrderStatusHistory, Review, ReviewImage
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    fields = ('product_name', 'product_brand', 'size', 'color', 'price', 'quantity', 'subtotal')
-    readonly_fields = ('subtotal',)
+    fields = ('product_name', 'product_brand', 'size', 'color', 'price', 'quantity', 'subtotal', 'referral_fee_amount', 'delivery_fee_amount', 'store_revenue')
+    readonly_fields = ('subtotal', 'referral_fee_amount', 'delivery_fee_amount', 'store_revenue')
 
 
 class OrderStatusHistoryInline(admin.TabularInline):
@@ -18,11 +18,27 @@ class OrderStatusHistoryInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('order_number', 'market', 'customer_name', 'customer_phone', 'status', 'total_amount', 'payment_method', 'card_type', 'order_date')
+    list_display = ('order_number', 'market', 'customer_name', 'customer_phone', 'status', 'total_amount', 'total_fees', 'net_revenue', 'payment_method', 'card_type', 'order_date')
     list_filter = ('market', 'status', 'payment_method', 'card_type', 'payment_status', 'order_date', 'created_at')
     search_fields = ('order_number', 'customer_name', 'customer_phone', 'customer_email', 'user__phone', 'card_last_four')
     ordering = ('-created_at',)
-    readonly_fields = ('order_number', 'market', 'delivery_country', 'card_last_four', 'order_date', 'created_at', 'updated_at', 'items_count', 'is_active', 'can_cancel')
+    readonly_fields = ('order_number', 'market', 'delivery_country', 'card_last_four', 'order_date', 'created_at', 'updated_at', 'items_count', 'is_active', 'can_cancel', 'total_fees', 'net_revenue')
+    
+    def total_fees(self, obj):
+        """Calculate total referral fees for this order"""
+        from django.db.models import Sum
+        total = obj.items.aggregate(total=Sum('referral_fee_amount'))['total']
+        return total or 0
+    total_fees.short_description = 'Total Fees'
+    total_fees.admin_order_field = 'items__referral_fee_amount'
+    
+    def net_revenue(self, obj):
+        """Calculate net revenue (after fees) for stores in this order"""
+        from django.db.models import Sum
+        total = obj.items.aggregate(total=Sum('store_revenue'))['total']
+        return total or 0
+    net_revenue.short_description = 'Net Revenue (After Fees)'
+    net_revenue.admin_order_field = 'items__store_revenue'
     
     inlines = [OrderItemInline, OrderStatusHistoryInline]
     
@@ -48,6 +64,11 @@ class OrderAdmin(admin.ModelAdmin):
         ('Pricing', {
             'fields': ('subtotal', 'shipping_cost', 'tax', 'total_amount', 'currency', 'currency_code')
         }),
+        ('Referral Fees Summary', {
+            'fields': ('total_fees', 'net_revenue'),
+            'description': 'Total referral fees deducted and net revenue for stores (calculated from order items)',
+            'classes': ('collapse',)
+        }),
         ('Timestamps', {
             'fields': ('order_date', 'confirmed_date', 'shipped_date', 'delivered_date', 'cancelled_date', 'created_at', 'updated_at'),
             'classes': ('collapse',)
@@ -61,10 +82,36 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ('order', 'product_name', 'size', 'color', 'price', 'quantity', 'subtotal')
+    list_display = ('order', 'product_name', 'size', 'color', 'price', 'quantity', 'subtotal', 'referral_fee_amount', 'delivery_fee_amount', 'store_revenue', 'created_at')
+    list_filter = ('created_at',)
     search_fields = ('order__order_number', 'product_name', 'product_brand')
     ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'subtotal')
+    readonly_fields = ('created_at', 'subtotal', 'referral_fee_amount', 'delivery_fee_amount', 'store_revenue', 'net_revenue')
+    
+    fieldsets = (
+        ('Order & Product', {
+            'fields': ('order', 'sku', 'product_name', 'product_brand', 'size', 'color', 'image_url')
+        }),
+        ('Pricing', {
+            'fields': ('price', 'quantity', 'subtotal')
+        }),
+        ('Referral Fee', {
+            'fields': ('referral_fee_percentage', 'referral_fee_fixed', 'referral_fee_amount'),
+            'description': 'Referral fee information charged from the store.'
+        }),
+        ('Delivery Fee', {
+            'fields': ('delivery_fee_amount',),
+            'description': 'Delivery fee amount for this product (based on category).'
+        }),
+        ('Store Revenue', {
+            'fields': ('store_revenue', 'net_revenue'),
+            'description': 'store_revenue is the net amount the store receives after referral fees (delivery fees are paid by customer).'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(OrderStatusHistory)
