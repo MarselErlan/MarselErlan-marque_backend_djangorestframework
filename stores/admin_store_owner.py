@@ -40,10 +40,10 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     ]
     search_fields = ['name', 'slug', 'owner__phone', 'owner__full_name', 'email']
     readonly_fields = [
-        'slug', 'rating', 'reviews_count', 'orders_count', 'products_count',
+        'rating', 'reviews_count', 'orders_count', 'products_count',
         'likes_count', 'created_at', 'updated_at'
     ]
-    prepopulated_fields = {'slug': ('name',)}
+    prepopulated_fields = {'slug': ('name',)}  # Slug is editable when creating, readonly when editing
     
     # Admin Actions (for superusers only)
     @admin.action(description='Approve selected stores')
@@ -111,7 +111,8 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'slug', 'description', 'owner', 'market')
+            'fields': ('name', 'slug', 'description', 'owner', 'market'),
+            'description': 'Slug is auto-generated from name when creating. It becomes readonly after creation.'
         }),
         ('Visual Identity', {
             'fields': ('logo', 'logo_url', 'cover_image', 'cover_image_url')
@@ -202,6 +203,17 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
     
     def get_readonly_fields(self, request, obj=None):
+        """
+        Make owner and slug readonly if editing existing store.
+        Slug is editable when creating (for prepopulated_fields to work).
+        """
+        readonly = list(self.readonly_fields)
+        
+        if obj:  # Editing existing store
+            readonly.append('owner')
+            readonly.append('slug')  # Make slug readonly when editing
+        
+        return readonly
         """
         Make owner readonly if editing existing store.
         """

@@ -107,8 +107,8 @@ class StoreAdminTest(TestCase):
     def test_store_admin_readonly_fields(self):
         """Test StoreAdmin readonly_fields"""
         admin = site._registry[Store]
+        # Base readonly fields (slug is added dynamically when editing)
         expected_fields = [
-            'slug',
             'rating',
             'reviews_count',
             'orders_count',
@@ -118,6 +118,21 @@ class StoreAdminTest(TestCase):
             'updated_at',
         ]
         self.assertEqual(admin.readonly_fields, expected_fields)
+        
+        # Test that slug becomes readonly when editing
+        from django.test import RequestFactory
+        factory = RequestFactory()
+        request = factory.get('/admin/')
+        request.user = self.superuser
+        
+        # When editing (obj exists), slug should be readonly
+        readonly_when_editing = admin.get_readonly_fields(request, obj=self.store)
+        self.assertIn('slug', readonly_when_editing)
+        self.assertIn('owner', readonly_when_editing)
+        
+        # When creating (obj is None), slug should be editable
+        readonly_when_creating = admin.get_readonly_fields(request, obj=None)
+        self.assertNotIn('slug', readonly_when_creating)
     
     def test_store_admin_fieldsets(self):
         """Test StoreAdmin fieldsets structure"""
