@@ -265,7 +265,8 @@ class SKUInline(admin.TabularInline):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
-@admin.register(Product)
+# ProductAdmin is now in admin_store_owner.py for store owners
+# Superusers can still use this, but store owners will use StoreOwnerProductAdmin
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'brand', 'market', 'gender', 'category', 'subcategory', 'second_subcategory', 'catalog_level_display', 'price', 'discount', 'sales_count', 'rating', 'in_stock', 'is_active')
     list_filter = ('market', 'gender', 'category', 'subcategory', 'second_subcategory', 'brand', 'is_active', 'in_stock', 'is_featured', 'is_best_seller', 'created_at')

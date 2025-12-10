@@ -9,7 +9,8 @@ from django.contrib import messages
 from .models import Store, StoreFollower
 
 
-@admin.register(Store)
+# StoreAdmin is now in admin_store_owner.py for store owners
+# Superusers can still use this, but store owners will use StoreOwnerStoreAdmin
 class StoreAdmin(admin.ModelAdmin):
     """Admin interface for Store model."""
     

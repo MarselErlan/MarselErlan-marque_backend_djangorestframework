@@ -11,7 +11,8 @@ from django.utils import timezone
 from datetime import timedelta
 
 from stores.models import Store, StoreFollower
-from stores.admin import StoreAdmin, StoreFollowerAdmin
+from stores.admin_store_owner import StoreOwnerStoreAdmin as StoreAdmin
+from stores.admin import StoreFollowerAdmin
 from products.models import Product, Category, Brand, Currency
 
 User = get_user_model()
