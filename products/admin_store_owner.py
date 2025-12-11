@@ -83,14 +83,18 @@ class StoreOwnerProductAdmin(admin.ModelAdmin):
     
     def get_readonly_fields(self, request, obj=None):
         """
-        Make store field readonly for store owners (they can't change store ownership).
-        Superusers can change store.
+        Make store field readonly for store owners when editing (they can't change store ownership).
+        When creating, store field is editable but will be auto-assigned in save_model.
+        Superusers can always change store.
         """
         readonly = list(self.readonly_fields)
         
         if not request.user.is_superuser:
-            # Store owners cannot change the store field
-            readonly.append('store')
+            # Store owners cannot change the store field when editing existing products
+            # But when creating (obj is None), the field should be visible (will be auto-assigned)
+            if obj is not None:  # Editing existing product
+                readonly.append('store')
+            # When creating (obj is None), don't make it readonly so it appears in form
         
         return readonly
     
@@ -150,9 +154,13 @@ class StoreOwnerProductAdmin(admin.ModelAdmin):
         form = super().get_form(request, obj, **kwargs)
         
         if not request.user.is_superuser:
-            # Limit store choices to user's stores
             user_stores = request.user.owned_stores.filter(is_active=True)
-            form.base_fields['store'].queryset = user_stores
+            
+            # Only modify store field if it exists in the form
+            # (it might not exist if it's readonly or excluded)
+            if 'store' in form.base_fields:
+                # Limit store choices to user's stores
+                form.base_fields['store'].queryset = user_stores
             
             # If editing existing product, ensure it's from user's store
             if obj and obj.store not in user_stores:
