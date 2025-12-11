@@ -227,6 +227,24 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
         
         return readonly
     
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Safely handle form fields, especially owner field for store owners.
+        """
+        form = super().get_form(request, obj, **kwargs)
+        
+        if not request.user.is_superuser:
+            # For store owners, ensure owner field is handled correctly
+            # Owner is auto-set in save_model, but we can filter the queryset if needed
+            if 'owner' in form.base_fields:
+                # For store owners, limit owner choices to themselves
+                # (though owner is auto-set, this prevents confusion)
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                form.base_fields['owner'].queryset = User.objects.filter(id=request.user.id)
+        
+        return form
+    
     def get_prepopulated_fields(self, request, obj=None):
         """
         Only enable prepopulated_fields when creating (not editing).
