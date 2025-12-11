@@ -167,9 +167,10 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         """
-        Store owners can add stores (they become the owner).
+        Store owners cannot add new stores. Only superusers can add stores.
+        Store owners can only view and update their existing stores.
         """
-        return True
+        return request.user.is_superuser
     
     def has_change_permission(self, request, obj=None):
         """
@@ -185,15 +186,9 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     
     def has_delete_permission(self, request, obj=None):
         """
-        Store owners can only delete their own stores.
+        Store owners cannot delete stores. Only superusers can delete stores.
         """
-        if request.user.is_superuser:
-            return True
-        
-        if obj is not None:
-            return obj.owner == request.user
-        
-        return True
+        return request.user.is_superuser
     
     def save_model(self, request, obj, form, change):
         """
@@ -216,14 +211,30 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
     
     def get_readonly_fields(self, request, obj=None):
         """
-        Make owner and slug readonly if editing existing store.
-        Slug is editable when creating (for prepopulated_fields to work).
+        Make certain fields readonly for store owners.
+        Store owners cannot change: owner, slug, market, status, is_active, is_verified, 
+        is_featured, contract dates.
         """
         readonly = list(self.readonly_fields)
         
-        if obj:  # Editing existing store
-            readonly.append('owner')
-            readonly.append('slug')  # Make slug readonly when editing
+        if not request.user.is_superuser:
+            # For store owners, make these fields readonly
+            readonly.extend([
+                'owner',
+                'slug',
+                'market',
+                'status',
+                'is_active',
+                'is_verified',
+                'is_featured',
+                'contract_signed_date',
+                'contract_expiry_date',
+            ])
+        else:
+            # For superusers, only make owner and slug readonly when editing
+            if obj:  # Editing existing store
+                readonly.append('owner')
+                readonly.append('slug')
         
         return readonly
     
