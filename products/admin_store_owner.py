@@ -14,6 +14,93 @@ from .admin import (
 )
 
 
+# Custom inlines for store owners that handle creation properly
+class StoreOwnerProductSizeOptionInline(admin.TabularInline):
+    """Product size options inline for store owners"""
+    model = ProductSizeOption
+    extra = 1
+    fields = ('name', 'sort_order', 'is_active')
+    verbose_name = "Size Option"
+    verbose_name_plural = "Size Options"
+    can_delete = True
+
+
+class StoreOwnerProductColorOptionInline(admin.TabularInline):
+    """Product color options inline for store owners"""
+    model = ProductColorOption
+    fk_name = 'product'
+    extra = 1
+    fields = ('size', 'name', 'hex_code', 'is_active')
+    verbose_name = "Color Option"
+    verbose_name_plural = "Color Options"
+    can_delete = True
+    
+    def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
+        """Filter size options based on product being edited"""
+        if db_field.name == 'size':
+            # Get product ID from request
+            obj_id = None
+            if request and hasattr(request, 'resolver_match') and request.resolver_match:
+                obj_id = request.resolver_match.kwargs.get('object_id')
+            
+            if obj_id:
+                # Editing existing product - show only sizes for this product
+                kwargs['queryset'] = ProductSizeOption.objects.filter(product_id=obj_id)
+            else:
+                # Creating new product - allow all (will be filtered after product is saved)
+                # This allows inlines to be visible when creating
+                pass
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+class StoreOwnerSKUInline(admin.TabularInline):
+    """SKU inline for store owners"""
+    model = SKU
+    extra = 1
+    fields = ('sku_code', 'size_option', 'color_option', 'price', 'original_price', 'currency', 'stock', 'variant_image', 'is_active')
+    readonly_fields = ('sku_code',)
+    verbose_name = "SKU"
+    verbose_name_plural = "SKUs"
+    can_delete = True
+    
+    def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
+        """Filter size/color options based on product being edited"""
+        if request and hasattr(request, 'resolver_match') and request.resolver_match:
+            obj_id = request.resolver_match.kwargs.get('object_id')
+            
+            if obj_id:
+                # Editing existing product - filter by product
+                if db_field.name == 'size_option':
+                    kwargs['queryset'] = ProductSizeOption.objects.filter(product_id=obj_id)
+                elif db_field.name == 'color_option':
+                    kwargs['queryset'] = ProductColorOption.objects.filter(product_id=obj_id)
+            else:
+                # Creating new product - allow all (will be filtered after product is saved)
+                # This allows inlines to be visible when creating
+                pass
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+class StoreOwnerProductImageInline(admin.TabularInline):
+    """Product images inline for store owners"""
+    model = ProductImage
+    extra = 1
+    fields = ('image', 'alt_text', 'sort_order')
+    verbose_name = "Gallery Image"
+    verbose_name_plural = "Gallery Images"
+    can_delete = True
+
+
+class StoreOwnerProductFeatureInline(admin.TabularInline):
+    """Product features inline for store owners"""
+    model = ProductFeature
+    extra = 1
+    fields = ('feature_text', 'sort_order')
+    verbose_name = "Feature"
+    verbose_name_plural = "Features"
+    can_delete = True
+
+
 class StoreOwnerProductAdmin(admin.ModelAdmin):
     """
     Custom admin for store owners - they can only manage products from their own stores.
@@ -38,12 +125,13 @@ class StoreOwnerProductAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     
     # Add inlines for product images, SKUs, sizes, colors, and features
+    # Using custom inlines that handle creation properly
     inlines = [
-        ProductSizeOptionInline,
-        ProductColorOptionInline,
-        SKUInline,
-        ProductImageInline,
-        ProductFeatureInline,
+        StoreOwnerProductSizeOptionInline,
+        StoreOwnerProductColorOptionInline,
+        StoreOwnerSKUInline,
+        StoreOwnerProductImageInline,
+        StoreOwnerProductFeatureInline,
     ]
     
     fieldsets = (
