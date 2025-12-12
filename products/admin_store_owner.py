@@ -8,6 +8,10 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from .models import Product, SKU, ProductImage, ProductFeature, ProductSizeOption, ProductColorOption
+from .admin import (
+    ProductSizeOptionInline, ProductColorOptionInline, SKUInline,
+    ProductImageInline, ProductFeatureInline
+)
 
 
 class StoreOwnerProductAdmin(admin.ModelAdmin):
@@ -33,9 +37,22 @@ class StoreOwnerProductAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at', 'rating', 'reviews_count', 'sales_count')
     prepopulated_fields = {'slug': ('name',)}
     
+    # Add inlines for product images, SKUs, sizes, colors, and features
+    inlines = [
+        ProductSizeOptionInline,
+        ProductColorOptionInline,
+        SKUInline,
+        ProductImageInline,
+        ProductFeatureInline,
+    ]
+    
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'slug', 'description', 'store', 'brand')
+        }),
+        ('Main Image', {
+            'fields': ('image',),
+            'description': 'Main product image (displayed as primary image)'
         }),
         ('Category Structure', {
             'fields': ('category', 'subcategory', 'second_subcategory'),
