@@ -109,7 +109,16 @@ class StoreRegistrationSerializer(serializers.ModelSerializer):
         validated_data['owner'] = self.context['request'].user
         validated_data['status'] = 'pending'
         validated_data['is_active'] = False
-        return Store.objects.create(**validated_data)
+        store = Store.objects.create(**validated_data)
+        
+        # Grant staff access to store owner so they can access Django admin
+        # This allows them to manage their store and products through admin interface
+        owner = validated_data['owner']
+        if not owner.is_staff:
+            owner.is_staff = True
+            owner.save(update_fields=['is_staff'])
+        
+        return store
     
     def validate_name(self, value):
         if Store.objects.filter(name=value).exists():

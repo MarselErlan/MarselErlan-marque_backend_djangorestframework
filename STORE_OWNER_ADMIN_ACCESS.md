@@ -1,81 +1,108 @@
-# 🎯 Store Owner Admin Access Configuration
+# Store Owner Django Admin Access
 
-## Current Setup
+## Overview
 
-### Products Module
+Store owners can access Django admin to manage their stores and products. Staff access is automatically granted when they register a store.
 
-- ✅ **Visible**: Store owners with active stores can see Products
-- ✅ **Full CRUD Access**:
-  - **GET** (List/View): ✅ Can view products from their stores
-  - **POST** (Create): ✅ Can create new products
-  - **PUT/PATCH** (Update): ✅ Can update products from their stores
-  - **DELETE**: ✅ Can delete products from their stores
+## How It Works
 
-### Stores Module
+### 1. Store Registration (Automatic Staff Access)
 
-- ✅ **Visible**: Only if store owner has at least one active store
-- ✅ **Hidden**: If store owner has no stores
-- ✅ **Full CRUD Access** (when visible):
-  - **GET** (List/View): ✅ Can view their own stores
-  - **POST** (Create): ✅ Can create new stores
-  - **PUT/PATCH** (Update): ✅ Can update their own stores
-  - **DELETE**: ✅ Can delete their own stores
+When a user registers a store through the API (`/api/v1/stores/register/`):
 
----
+- The store is created with status `pending`
+- The authenticated user becomes the store owner
+- **The owner is automatically granted `is_staff=True`** to access Django admin
 
-## Behavior
+**Location:** `stores/serializers.py` - `StoreRegistrationSerializer.create()`
 
-### Store Owner WITH Stores
+### 2. Store Approval (Additional Staff Access Grant)
 
-- ✅ Sees **Products** module
-- ✅ Sees **Stores** module
-- ✅ Can manage both products and stores
+When a superuser approves a store in Django admin:
 
-### Store Owner WITHOUT Stores
+- Store status changes from `pending` to `active`
+- Store `is_active` is set to `True`
+- **The owner is granted `is_staff=True`** (if not already granted)
 
-- ✅ Sees **Products** module (but empty list)
-- ❌ **Stores** module is **hidden**
-- ⚠️ Cannot create products (needs a store first)
+**Location:** `stores/admin_store_owner.py` - `approve_stores()` action and `save_model()` method
 
----
+### 3. Accessing Django Admin
 
-## Permissions Summary
+Store owners can access Django admin by:
 
-### Products Admin (`StoreOwnerProductAdmin`)
+1. **Go to:** `https://your-domain.com/admin/`
+2. **Login with:** Their regular user credentials (phone number + password/OTP)
+3. **They will see:**
+   - **PRODUCTS** module - to manage their store's products (full CRUD)
+   - **STORES** module - to view and update their store details (read-only for certain fields)
 
-```python
-has_module_permission()  # Shows module if user has stores
-has_add_permission()     # ✅ Can create products
-has_change_permission()  # ✅ Can update own products
-has_delete_permission()  # ✅ Can delete own products
-get_queryset()          # Filters to only user's stores
+### 4. Admin Permissions
+
+Store owners have **limited admin access**:
+
+#### Products Admin:
+
+- ✅ Can create, read, update, and delete products from their own stores
+- ✅ Can only see products from stores they own
+- ✅ Cannot change product store ownership
+- ❌ Cannot see products from other stores
+
+#### Stores Admin:
+
+- ✅ Can view and update their own store details
+- ✅ Can update: name, description, email, phone, website, address, logo, cover image
+- ❌ Cannot add new stores
+- ❌ Cannot delete stores
+- ❌ Cannot change: owner, slug, market, status, is_active, is_verified, is_featured, contract dates
+
+### 5. Admin URL
+
+Store owners access admin at:
+
+```
+https://your-domain.com/admin/
 ```
 
-### Stores Admin (`StoreOwnerStoreAdmin`)
+They use their regular user credentials (same as the main website login).
 
-```python
-has_module_permission()  # Shows module only if user has stores
-has_add_permission()     # ✅ Can create stores
-has_change_permission()  # ✅ Can update own stores
-has_delete_permission()  # ✅ Can delete own stores
-get_queryset()          # Filters to only user's stores
-```
+## Security Notes
 
----
+- Store owners only see data from their own stores
+- All admin views are filtered by store ownership
+- Superusers can see and manage everything
+- Staff access is automatically granted - no manual setup needed
 
-## Notes
+## Troubleshooting
 
-1. **Store owners need at least one store** to see the Stores module
-2. **Products module is always visible** if user is staff and has stores
-3. **Full CRUD access** is granted for both modules when visible
-4. **Superusers** see everything regardless
+### Store owner cannot access admin:
 
----
+1. **Check if user has `is_staff=True`:**
 
-## If Store Owner Has No Stores
+   ```python
+   # In Django shell
+   from users.models import User
+   user = User.objects.get(phone='+996555111111')
+   print(user.is_staff)  # Should be True
+   ```
 
-The Stores module will be **completely hidden** from the admin interface. The user will only see:
+2. **If `is_staff=False`, grant it manually:**
 
-- Products module (but cannot create products without a store)
+   ```python
+   user.is_staff = True
+   user.save()
+   ```
 
-**Solution**: Store owner should create a store first (via API: `POST /api/v1/stores/register/`)
+3. **Or re-approve the store** (this will automatically grant staff access)
+
+### Store owner sees "You don't have permission":
+
+- This happens if the user has no active stores
+- The admin modules are hidden if `user.owned_stores.filter(is_active=True).exists()` returns False
+- Solution: Ensure the store is approved and active
+
+## Code References
+
+- **Store Registration:** `stores/serializers.py` - `StoreRegistrationSerializer`
+- **Admin Configuration:** `stores/admin_store_owner.py` - `StoreOwnerStoreAdmin`
+- **Product Admin:** `products/admin_store_owner.py` - `StoreOwnerProductAdmin`
+- **Permissions:** `stores/permissions.py` - `IsStoreOwner`

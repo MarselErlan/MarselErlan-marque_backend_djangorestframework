@@ -63,10 +63,18 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
         """Approve selected stores (set status to active)."""
         if not request.user.is_superuser:
             return
+        
+        # Grant staff access to store owners when approving their stores
+        for store in queryset:
+            owner = store.owner
+            if owner and not owner.is_staff:
+                owner.is_staff = True
+                owner.save(update_fields=['is_staff'])
+        
         updated = queryset.update(status='active', is_active=True)
         self.message_user(
             request,
-            f'{updated} store(s) approved and activated.',
+            f'{updated} store(s) approved and activated. Store owners granted admin access.',
         )
     
     @admin.action(description='Suspend selected stores')
@@ -195,6 +203,7 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
         Auto-set owner if creating new store and owner is not set.
         For store owners, always set owner to current user.
         For superusers, only set if owner is not already set.
+        Also grant staff access to store owners when store is activated.
         """
         if not change:  # Creating new store
             if not request.user.is_superuser:
@@ -206,6 +215,13 @@ class StoreOwnerStoreAdmin(admin.ModelAdmin):
             
             if not obj.status:
                 obj.status = 'pending'
+        
+        # Grant staff access to store owner if store is being activated
+        if change and obj.status == 'active' and obj.is_active:
+            owner = obj.owner
+            if owner and not owner.is_staff:
+                owner.is_staff = True
+                owner.save(update_fields=['is_staff'])
         
         super().save_model(request, obj, form, change)
     

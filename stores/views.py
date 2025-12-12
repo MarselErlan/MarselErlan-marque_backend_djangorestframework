@@ -159,10 +159,18 @@ def store_detail(request, store_slug):
 @permission_classes([AllowAny])
 def store_products(request, store_slug):
     """
-    Get products from a specific store.
+    Get products from a specific store with filtering support.
     
     Filters:
     - market: Market filter (KG or US)
+    - category: Category slug
+    - subcategory: Subcategory slug
+    - sizes: Comma-separated list of sizes
+    - colors: Comma-separated list of colors
+    - brands: Comma-separated list of brand slugs/names
+    - price_min: Minimum price
+    - price_max: Maximum price
+    - sort_by: Sort order (popular, price_asc, price_desc, newest, rating)
     - limit: Number of results per page (default: 20)
     - offset: Number of results to skip (default: 0)
     """
@@ -175,14 +183,104 @@ def store_products(request, store_slug):
     limit = int(request.query_params.get('limit', 20))
     offset = int(request.query_params.get('offset', 0))
     
-    # Get products from this store
+    # Base queryset - products from this store
     queryset = Product.objects.filter(
         store=store,
         is_active=True,
         in_stock=True
     ).filter(
         Q(market=market) | Q(market='ALL')
-    ).order_by('-is_featured', '-sales_count', '-rating', '-created_at')
+    )
+    
+    # Apply filters
+    # Category filter
+    if category_slug := request.query_params.get('category'):
+        queryset = queryset.filter(category__slug=category_slug)
+    
+    # Subcategory filter
+    if subcategory_slug := request.query_params.get('subcategory'):
+        queryset = queryset.filter(subcategory__slug=subcategory_slug)
+    
+    # Size filter
+    if sizes := request.query_params.get('sizes'):
+        size_list = [size.strip() for size in sizes.split(',') if size.strip()]
+        queryset = queryset.filter(
+            skus__size_option__name__in=size_list
+        )
+    
+    # Color filter
+    if colors := request.query_params.get('colors'):
+        color_list = [color.strip() for color in colors.split(',') if color.strip()]
+        queryset = queryset.filter(
+            skus__color_option__name__in=color_list
+        )
+    
+    # Brand filter
+    if brands := request.query_params.get('brands'):
+        brand_list = [brand.strip() for brand in brands.split(',') if brand.strip()]
+        queryset = queryset.filter(
+            Q(brand__slug__in=brand_list) | Q(brand__name__in=brand_list)
+        )
+    
+    # Price filters
+    if price_min := request.query_params.get('price_min'):
+        try:
+            queryset = queryset.filter(skus__price__gte=float(price_min))
+        except ValueError:
+            pass
+    
+    if price_max := request.query_params.get('price_max'):
+        try:
+            queryset = queryset.filter(skus__price__lte=float(price_max))
+        except ValueError:
+            pass
+    
+    # Apply sorting
+    sort_by = request.query_params.get('sort_by', 'popular')
+    if sort_by == 'price_asc':
+        queryset = queryset.order_by('skus__price')
+    elif sort_by == 'price_desc':
+        queryset = queryset.order_by('-skus__price')
+    elif sort_by == 'newest':
+        queryset = queryset.order_by('-created_at')
+    elif sort_by == 'rating':
+        queryset = queryset.order_by('-rating', '-reviews_count')
+    else:  # popular (default)
+        queryset = queryset.order_by('-is_featured', '-sales_count', '-rating', '-created_at')
+    
+    # Get distinct products (in case of multiple SKUs matching filters)
+    queryset = queryset.distinct()
+    
+    # Get available filters for this store's products (before applying user filters)
+    base_queryset = Product.objects.filter(
+        store=store,
+        is_active=True,
+        in_stock=True
+    ).filter(
+        Q(market=market) | Q(market='ALL')
+    )
+    
+    # Get available filters using the same method as SubcategoryProductsView
+    from products.views import SubcategoryProductsView
+    from products.models import Category, Subcategory
+    from django.db.models import Min, Max
+    
+    available_filters = SubcategoryProductsView._get_available_filters(base_queryset)
+    
+    # Add categories and subcategories to filters
+    category_ids = base_queryset.values_list('category__id', flat=True).distinct().exclude(category__isnull=True)
+    categories = Category.objects.filter(id__in=category_ids, is_active=True).order_by('name')
+    available_filters['categories'] = [
+        {'id': cat.id, 'name': cat.name, 'slug': cat.slug}
+        for cat in categories
+    ]
+    
+    subcategory_ids = base_queryset.values_list('subcategory__id', flat=True).distinct().exclude(subcategory__isnull=True)
+    subcategories = Subcategory.objects.filter(id__in=subcategory_ids, is_active=True).order_by('name')
+    available_filters['subcategories'] = [
+        {'id': subcat.id, 'name': subcat.name, 'slug': subcat.slug}
+        for subcat in subcategories
+    ]
     
     # Get total count
     total = queryset.count()
@@ -190,7 +288,7 @@ def store_products(request, store_slug):
     # Apply pagination
     products = queryset[offset:offset + limit]
     
-    # Use product list serializer (we'll need to import it)
+    # Use product list serializer
     from products.serializers import ProductListSerializer
     serializer = ProductListSerializer(products, many=True, context={'request': request})
     
@@ -202,6 +300,7 @@ def store_products(request, store_slug):
             'slug': store.slug,
         },
         'products': serializer.data,
+        'filters': available_filters,
         'total': total,
         'limit': limit,
         'offset': offset,
