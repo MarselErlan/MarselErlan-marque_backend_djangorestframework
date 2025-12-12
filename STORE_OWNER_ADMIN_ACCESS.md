@@ -26,17 +26,44 @@ When a superuser approves a store in Django admin:
 
 **Location:** `stores/admin_store_owner.py` - `approve_stores()` action and `save_model()` method
 
-### 3. Accessing Django Admin
+### 3. Setting Password for Admin Access
+
+**IMPORTANT:** Store owners need to set a password to access Django admin. The system uses phone-based OTP authentication for the main website, but Django admin requires a password.
+
+**Set password via API:**
+
+```
+POST /api/v1/auth/set-password
+Authorization: Token YOUR_AUTH_TOKEN
+Content-Type: application/json
+
+{
+  "password": "your_secure_password",
+  "password_confirm": "your_secure_password"
+}
+```
+
+**Or set password via Django admin (superuser only):**
+
+1. Go to **"AUTHENTICATION AND AUTHORIZATION"** → **"Users"**
+2. Find the store owner
+3. Click **"Change password"** and set a password
+
+See `HOW_TO_SET_PASSWORD_FOR_STORE_ADMIN.md` for detailed instructions.
+
+### 4. Accessing Django Admin
 
 Store owners can access Django admin by:
 
 1. **Go to:** `https://your-domain.com/admin/`
-2. **Login with:** Their regular user credentials (phone number + password/OTP)
+2. **Login with:**
+   - **Phone:** Their phone number (e.g., `+996555111111`)
+   - **Password:** The password they set (see step 3 above)
 3. **They will see:**
    - **PRODUCTS** module - to manage their store's products (full CRUD)
    - **STORES** module - to view and update their store details (read-only for certain fields)
 
-### 4. Admin Permissions
+### 5. Admin Permissions
 
 Store owners have **limited admin access**:
 
@@ -55,7 +82,7 @@ Store owners have **limited admin access**:
 - ❌ Cannot delete stores
 - ❌ Cannot change: owner, slug, market, status, is_active, is_verified, is_featured, contract dates
 
-### 5. Admin URL
+### 6. Admin URL
 
 Store owners access admin at:
 
@@ -106,3 +133,5 @@ They use their regular user credentials (same as the main website login).
 - **Admin Configuration:** `stores/admin_store_owner.py` - `StoreOwnerStoreAdmin`
 - **Product Admin:** `products/admin_store_owner.py` - `StoreOwnerProductAdmin`
 - **Permissions:** `stores/permissions.py` - `IsStoreOwner`
+- **Password Setup:** `users/views.py` - `SetPasswordView` (API endpoint)
+- **Password Setup Guide:** `HOW_TO_SET_PASSWORD_FOR_STORE_ADMIN.md`

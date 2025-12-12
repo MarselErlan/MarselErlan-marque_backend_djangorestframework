@@ -54,6 +54,26 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         return value
 
 
+class SetPasswordSerializer(serializers.Serializer):
+    """Serializer for setting user password"""
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        help_text="Password must be at least 8 characters long"
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        help_text="Confirm password"
+    )
+    
+    def validate(self, data):
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError({
+                'password_confirm': 'Passwords do not match'
+            })
+        return data
+
+
 class AddressSerializer(serializers.ModelSerializer):
     """Serializer for Address model"""
     

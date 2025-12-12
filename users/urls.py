@@ -6,7 +6,7 @@ Routes for authentication, profile, addresses, payment methods, and notification
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    SendVerificationView, VerifyCodeView, LogoutView, ProfileView,
+    SendVerificationView, VerifyCodeView, LogoutView, ProfileView, SetPasswordView,
     AddressViewSet, PaymentMethodViewSet, NotificationViewSet,
     PhoneNumberViewSet, OrderViewSet,
 )
@@ -36,6 +36,9 @@ urlpatterns = [
     
     # GET/PUT /api/v1/auth/profile
     path('auth/profile', ProfileView.as_view(), name='profile'),
+    
+    # POST /api/v1/auth/set-password
+    path('auth/set-password', SetPasswordView.as_view(), name='set-password'),
     
     # ===========================
     # PROFILE ENDPOINTS (ViewSets)

@@ -428,6 +428,53 @@ class ProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class SetPasswordView(APIView):
+    """
+    POST /api/v1/auth/set-password - Set password for Django admin access
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Set password for Django admin access",
+        description="Set a password for the current user to enable Django admin login. "
+                    "This is required for store owners to access the admin interface.",
+        tags=["auth"],
+        request=inline_serializer(
+            name="SetPasswordRequest",
+            fields={
+                "password": serializers.CharField(help_text="Password (min 8 characters)"),
+                "password_confirm": serializers.CharField(help_text="Confirm password"),
+            },
+        ),
+        responses={
+            200: inline_serializer(
+                name="SetPasswordResponse",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "message": serializers.CharField(),
+                },
+            ),
+            400: OpenApiResponse(description="Validation error"),
+        },
+    )
+    def post(self, request):
+        """Set password for Django admin access"""
+        from .serializers import SetPasswordSerializer
+        
+        serializer = SetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            user.set_password(serializer.validated_data['password'])
+            user.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Password set successfully. You can now log in to Django admin.'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 # ===========================
 # ADDRESS VIEWS
 # ===========================
