@@ -118,6 +118,46 @@ class StoreRegistrationSerializer(serializers.ModelSerializer):
             owner.is_staff = True
             owner.save(update_fields=['is_staff'])
         
+        # Automatically create StoreManager for the store owner
+        from store_manager.models import StoreManager
+        
+        # Determine market permissions based on store market
+        can_manage_kg = store.market in ['KG', 'ALL']
+        can_manage_us = store.market in ['US', 'ALL']
+        
+        # Create or update StoreManager for the store owner
+        # StoreManager has OneToOneField with User, so each user can only have one manager profile
+        # But the manager can be linked to a specific store or be platform-wide (store=None)
+        store_manager, created = StoreManager.objects.get_or_create(
+            user=owner,
+            defaults={
+                'store': store,
+                'role': 'manager',  # Store owners are managers of their own store
+                'can_manage_kg': can_manage_kg,
+                'can_manage_us': can_manage_us,
+                'is_active': True,
+                # Full permissions for store owners
+                'can_view_orders': True,
+                'can_edit_orders': True,
+                'can_cancel_orders': True,
+                'can_view_revenue': True,
+                'can_export_data': True,
+            }
+        )
+        
+        # If StoreManager already exists, update it to link to this store
+        # This handles the case where user was a platform-wide manager before
+        if not created:
+            # Update store link and market permissions
+            store_manager.store = store
+            store_manager.can_manage_kg = can_manage_kg
+            store_manager.can_manage_us = can_manage_us
+            store_manager.is_active = True
+            # Ensure they have manager role (not viewer)
+            if store_manager.role == 'viewer':
+                store_manager.role = 'manager'
+            store_manager.save()
+        
         return store
     
     def validate_name(self, value):
